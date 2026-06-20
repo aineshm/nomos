@@ -8,6 +8,20 @@
 
 ---
 
+## 0. Status update (2026-06-20) — plan changes agreed after main `e2cd4cc`
+
+A large feature landed on `origin/main` (`e2cd4cc` "Worldsim 3D physics path, traffic-law RL, and respawn fixes", DEVLOG 49–52) that overlaps this contract. We are **not** pulling/merging it (the Cesium viewers have diverged into incompatible architectures). Instead we adopt its *findings* as decisions. Three changes to the plan:
+
+**① Spawn fix — DONE on main, dropped here.** Our diagnosed "crash floor" was ~94% a spawn artifact (47/96 cars flagged crashed on frame 0). Main fixed exactly this in `kinematic.step` (DEVLOG 52): spawn-immune cars are now **excluded as collision partners** (`neighbor_ok = valid & ~immune[cand]`), and respawns **merge in at 0.6× the edge speed limit** instead of a dead stop. We will **not** rebuild this — adopt main's approach when/if integrating. Effect on this contract: `just_crashed`/`crashes` (§4, §6) now reflect genuine car-to-car contact, not spawn overlap. Main also *tried and reverted* respawn-at-route-start (piled cars onto shared start nodes, worse at 6000 cars) — don't retry it.
+
+**② Remove-on-arrival (finite cohort) — TO BUILD here, complementary.** Not on main (main kept continuous respawn). Behavior: when a car reaches its destination it **freezes at the destination and is masked out of collision / reward / cost** from that step on; we log the arrival step + location; **no respawn**. This yields one clean origin→destination trajectory per car (no teleport-streak data pollution) and naturally decreasing density. It refines the semantics below: `arrived[t,i]` (§7) latches True once and stays; an arrived car stops contributing to other cars' costs. ⚠️ This edits `kinematic.py` (training-env code) — sequenced as the next env change, pending explicit go. Chosen over "park-on-arrival" because a frozen-but-collidable car becomes a phantom obstacle that re-pollutes the data.
+
+**③ `legality.py` — available reference, NOT a mandate.** Main ships `env/legality.py`: a pure `(env, state) → per-car` check — **OFF-LANE** (>1.5 lane-widths from the nearest lane centerline of the segment the car is *currently* on; point-to-segment so legal lane-changes / corner-cuts don't false-trip) and **WRONG-WAY** (heading against the route while moving; respawn-grace exempt). On main it is baked into the PPO reward (`w_offlane` / `w_wrongway`), **not** split into a CMDP cost channel. It is the natural source for this contract's `off_road` / `rule_violation` (§6) and the verifier's off-road / wrong-way predicates (§8) — **but the verifier is now being built independently** (separate `rl-verifier` worktree, branched from `dfc67b9`), so whether to consume `legality.py` or re-derive the geometry is **the verifier author's call**. Treat it as a validated reference, not a required dependency.
+
+> Note on "road limits": speed limits **are already hard-enforced** — `kinematic.step` clips `speed` to `min(v_max, routes_speed[edge])`, so the §6 rule-bit `1 = over speed limit` is currently *unreachable* in the kinematic env. The visible "cars don't follow the road" behavior is **lane-keeping**, not speed: our `runs/trained.msgpack` was trained with **no** off-lane penalty (the legality reward lives only on main), so it cuts corners / drifts. ② + adopting ③'s signal are what close that gap.
+
+---
+
 ## 1. Mental model (read this first)
 
 - **The simulator is the dataset.** No real-car data, no imitation. You generate experience by stepping the env.
@@ -61,10 +75,10 @@ Per-agent arrays, shape `(N,)` unless noted. ✅ today; 🔜 added by the refram
 | `route_idx` | (N,) i32 | index into the route pool ✅ |
 | `wp_ptr` | (N,) i32 | current waypoint along the route ✅ |
 | `lane` | (N,) i32 | discrete lane index ✅ |
-| `just_crashed` | (N,) bool | collided **this** step (then respawns) ✅ → **primary cost signal** |
+| `just_crashed` | (N,) bool | collided **this** step (then respawns) ✅ → **primary cost signal**; genuine car-to-car contact only since main's spawn fix (§0①) |
 | `crashes` | (N,) i32 | cumulative collisions ✅ |
-| `spawn_grace` | (N,) i32 | merge-in immunity countdown ✅ |
-| `goals` | (N,) i32 | cumulative trips completed ✅ → **throughput** |
+| `spawn_grace` | (N,) i32 | merge-in immunity countdown ✅; immune cars excluded as collision partners (§0①) |
+| `goals` | (N,) i32 | cumulative trips completed ✅ → **throughput** (semantics shift under remove-on-arrival, §0②) |
 | `ped_pos` | (M,2) f32 | pedestrian positions ✅ |
 | `t` | scalar i32 | step counter ✅ |
 | `z` 🔜 | (N,) f32 | ground elevation under the car |
@@ -106,7 +120,7 @@ cost = info["just_crashed"].astype(f32)          # ✅ available now
      + info["off_road"].astype(f32)              # 🔜
      + (info["rule_violation"] > 0).astype(f32)  # 🔜
 ```
-`rl/ppo.py` already subtracts `lam * cost` (Lagrangian). Today it uses `just_crashed`; widen it to the sum above as the 🔜 signals land.
+`rl/ppo.py` already subtracts `lam * cost` (Lagrangian). Today it uses `just_crashed`; widen it to the sum above as the 🔜 signals land. **`off_road` / wrong-way already exist on main** as `env/legality.py` (reward-shaped via `w_offlane`/`w_wrongway`, not yet a cost) — see §0③; it's a reference, not a required import.
 
 **Rule-violation enum** 🔜 (bitmask in `rule_violation`):
 `1 = over speed limit · 2 = wrong-way on one-way · 4 = entered occupied uncontrolled junction without yielding`.
@@ -232,8 +246,9 @@ reward = w_progress * progress_along_route        # forward m this step
 | Env, state, obs, dynamics | `smoothride/env/kinematic.py` ✅ | sim |
 | Elevation/grade, buildings | `smoothride/data/` 🔜 | sim (3D plan) |
 | Scene schema (render contract) | `smoothride/demo/scene.py` 🔜 | sim (3D plan) |
-| Trace dataclasses | `smoothride/rl/trace.py` 🧩 | **you** |
-| Deterministic verifier | `smoothride/rl/verifier.py` 🧩 | **you** |
+| Trace dataclasses | `smoothride/rl/trace.py` 🧩 | **you** (in `rl-verifier` worktree, §0③) |
+| Deterministic verifier | `smoothride/rl/verifier.py` 🧩 | **you** (in `rl-verifier` worktree, §0③) |
+| Off-lane / wrong-way signal | `smoothride/env/legality.py` (on `origin/main`) | reference for the verifier — §0③ |
 | Reward (CMDP objective) | `smoothride/env/kinematic.py` reward + `rl/` 🧩 | **you** |
 | Lagrangian training | `smoothride/rl/ppo.py` ✅ (extend cost) | shared |
 
