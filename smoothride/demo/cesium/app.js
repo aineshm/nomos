@@ -94,16 +94,32 @@ function speedColor(spd, vmax) {
   return Cesium.Color.fromHsl(0.33 * f, 0.9, 0.5);   // red(stopped) -> green(fast)
 }
 
+function frameIndex(car, start, time, meta) {
+  const f = Cesium.JulianDate.secondsDifference(time, start) / meta.dt;
+  return Math.max(0, Math.min(car.lng.length - 1, Math.round(f)));
+}
+
 function addCar(viewer, car, start, meta) {
   const pos = sampledPosition(car, start, meta);
+  // Orient by the sim's OWN heading (car.hdg), not by velocity: hdg is the car's
+  // true facing every step, so the box faces forward while driving and never
+  // spins on a stop or a respawn-teleport (where velocity orientation goes wild).
+  // Sim heading is radians CCW from east; Cesium heading is CW from north, hence
+  // (pi/2 - hdg). Box dimensions.x (CAR_L, the length) lies along that heading.
+  const orientation = new Cesium.CallbackProperty((time) => {
+    const p = pos.getValue(time);
+    if (!p) return undefined;
+    const hdg = car.hdg[frameIndex(car, start, time, meta)];
+    const hpr = new Cesium.HeadingPitchRoll(Cesium.Math.PI_OVER_TWO - hdg, 0, 0);
+    return Cesium.Transforms.headingPitchRollQuaternion(p, hpr);
+  }, false);
   viewer.entities.add({
     position: pos,
-    orientation: new Cesium.VelocityOrientationProperty(pos),
+    orientation: orientation,
     box: {
       dimensions: new Cesium.Cartesian3(CAR_L, CAR_W, CAR_H),
-      material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty(() => {
-        const f = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, start) / meta.dt;
-        const i = Math.max(0, Math.min(car.spd.length - 1, Math.round(f)));
+      material: new Cesium.ColorMaterialProperty(new Cesium.CallbackProperty((time) => {
+        const i = frameIndex(car, start, time, meta);
         return car.crash[i] ? Cesium.Color.DIMGRAY : speedColor(car.spd[i], meta.vmax);
       }, false)),
     },
