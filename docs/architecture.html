@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SmoothRide — RL Environment Architecture</title>
+<style>
+  :root {
+    --bg: #0a0d14;
+    --bg2: #0e131c;
+    --card: #141a25;
+    --card2: #1a2230;
+    --ink: #e6edf6;
+    --muted: #8b9bb0;
+    --line: #283344;
+    --data: #38bdf8;     /* ground truth / geometry */
+    --sim: #a78bfa;      /* compute / sim */
+    --loop: #fbbf24;     /* rl loop */
+    --verify: #34d399;   /* verifier */
+    --render: #f472b6;   /* render / demo */
+    --cosmos: #fb923c;   /* foundation models */
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1100px 600px at 80% -10%, rgba(167,139,250,.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 10%, rgba(56,189,248,.08), transparent 55%),
+      var(--bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 48px 28px 80px; }
+
+  header.hero { margin-bottom: 40px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--sim); margin: 0 0 12px;
+  }
+  h1 { font-size: clamp(30px, 4.4vw, 50px); line-height: 1.05; margin: 0 0 14px; font-weight: 800; letter-spacing: -.02em; }
+  h1 .accent { background: linear-gradient(90deg, var(--data), var(--sim) 55%, var(--render)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { color: var(--muted); font-size: 18px; max-width: 760px; margin: 0; }
+  .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 16px; }
+
+  h2 {
+    font-size: 13px; font-family: var(--mono); letter-spacing: .18em; text-transform: uppercase;
+    color: var(--muted); margin: 56px 0 18px; display: flex; align-items: center; gap: 12px;
+  }
+  h2::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--line), transparent); }
+
+  /* principles strip */
+  .principles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .pr {
+    background: linear-gradient(180deg, var(--card), var(--bg2));
+    border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+  }
+  .pr .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--loop); }
+  .pr h3 { font-size: 15px; margin: 8px 0 6px; }
+  .pr p { font-size: 13px; color: var(--muted); margin: 0; }
+
+  /* layered stack */
+  .stack { display: flex; flex-direction: column; gap: 0; }
+  .layer {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    padding: 18px 20px; position: relative;
+  }
+  .layer + .layer { margin-top: 30px; }
+  .layer::before {
+    content: "▼"; position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
+    color: var(--line); font-size: 14px;
+  }
+  .layer:first-child::before { content: none; }
+  .layer-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .layer-head .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .layer-head .name { font-weight: 700; font-size: 16px; }
+  .layer-head .role { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; }
+  .chip {
+    font-size: 13px; padding: 7px 12px; border-radius: 9px;
+    background: var(--card2); border: 1px solid var(--line); color: var(--ink);
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .chip b { font-weight: 600; }
+  .chip small { color: var(--muted); font-size: 11.5px; }
+  .chip .led { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+  .L-data  { border-left: 3px solid var(--data); }
+  .L-sim   { border-left: 3px solid var(--sim); }
+  .L-loop  { border-left: 3px solid var(--loop); }
+  .L-render{ border-left: 3px solid var(--render); }
+  .d-data{background:var(--data);} .d-sim{background:var(--sim);}
+  .d-loop{background:var(--loop);} .d-render{background:var(--render);}
+  .d-cosmos{background:var(--cosmos);} .d-verify{background:var(--verify);}
+
+  /* rl loop pipeline */
+  .loopwrap { background: linear-gradient(180deg, var(--card), var(--bg2)); border: 1px solid var(--line); border-radius: 16px; padding: 26px 24px 20px; }
+  .pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: stretch; }
+  .stage { background: var(--card2); border: 1px solid var(--line); border-radius: 12px; padding: 14px; position: relative; }
+  .stage .n { font-family: var(--mono); font-size: 11px; color: var(--loop); }
+  .stage h4 { margin: 6px 0 6px; font-size: 14px; }
+  .stage p { margin: 0; font-size: 12px; color: var(--muted); }
+  .pipe .stage:not(:last-child)::after {
+    content: "→"; position: absolute; right: -11px; top: 50%; transform: translateY(-50%);
+    color: var(--loop); font-size: 18px; z-index: 2;
+  }
+  .return {
+    margin-top: 14px; text-align: center; font-size: 12.5px; color: var(--loop);
+    font-family: var(--mono); border-top: 1px dashed var(--line); padding-top: 12px;
+  }
+
+  /* two-column: car model + cmdp */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  .panel h3 { margin: 0 0 12px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  pre {
+    margin: 0; font-family: var(--mono); font-size: 12.5px; color: #cdd9e8;
+    background: #0b0f17; border: 1px solid var(--line); border-radius: 10px; padding: 14px; overflow-x: auto;
+  }
+  .key { color: var(--sim); } .str { color: var(--verify); } .cmt { color: var(--muted); } .warn { color: var(--cosmos); }
+
+  /* tool grid */
+  .tools { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .tool { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .tool .t { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .tool .j { color: var(--muted); font-size: 12.5px; margin-top: 5px; }
+
+  footer { margin-top: 56px; color: var(--muted); font-size: 12.5px; font-family: var(--mono); border-top: 1px solid var(--line); padding-top: 16px; }
+
+  @media (max-width: 900px) {
+    .principles, .tools { grid-template-columns: 1fr 1fr; }
+    .pipe { grid-template-columns: 1fr; }
+    .pipe .stage:not(:last-child)::after { content: "↓"; right: 50%; top: auto; bottom: -16px; transform: translateX(50%); }
+    .duo { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) { .principles, .tools { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">SmoothRide · RL Environment Architecture</p>
+    <h1>Decentralized cars that coordinate<br><span class="accent">without traffic signals.</span></h1>
+    <p class="lede">Each agent has its own origin, destination, and local perception — no communication, no hive mind. It optimizes travel time under hard safety constraints, judged by a deterministic verifier.</p>
+    <p class="meta">2026-06-20 · companion to docs/superpowers/specs/2026-06-20-rl-env-reframe-design.md</p>
+  </header>
+
+  <!-- PRINCIPLES -->
+  <h2>The four separations that define the design</h2>
+  <div class="principles">
+    <div class="pr">
+      <div class="tag">Principle 01</div>
+      <h3>Agency, no hive mind</h3>
+      <p>Shared policy weights, but each car acts on <b>its own local observation</b>. No inter-agent comms or shared runtime state.</p>
+    </div>
+    <div class="pr">
+      <div class="tag">Principle 02</div>
+      <h3>Simulation ≠ Rendering</h3>
+      <p>Compute (physics + RL) produces poses; the render layer just draws them. Different engines, never conflated.</p>
+    </div>
+    <div class="pr">
+      <div class="tag">Principle 03</div>
+      <h3>Two world models</h3>
+      <p>A <b>tiny in-loop</b> predictor drives (µs). <b>Cosmos 3</b> reasons & generates <b>out of loop</b> (seconds). Cosmos never steers.</p>
+    </div>
+    <div class="pr">
+      <div class="tag">Principle 04</div>
+      <h3>Verify the trace</h3>
+      <p>Reward & validity come from a <b>deterministic</b> geometric pass over the log — not a re-simulation, not an LLM.</p>
+    </div>
+  </div>
+
+  <!-- SYSTEM STACK -->
+  <h2>The system, top to bottom</h2>
+  <div class="stack">
+
+    <div class="layer L-data">
+      <div class="layer-head"><span class="dot d-data"></span><span class="name">Ground truth &amp; geometry</span><span class="role">— the real San Francisco world (built once, offline)</span></div>
+      <div class="chips">
+        <span class="chip"><span class="led d-data"></span><b>OSMnx / OSM</b><small>roads · building footprints · school/construction tags</small></span>
+        <span class="chip"><span class="led d-data"></span><b>USGS 3DEP / Cesium Terrain</b><small>node z · edge grade</small></span>
+        <span class="chip"><span class="led d-data"></span><b>Route pool</b><small>origin→dest paths (OSM A* / Google cached)</small></span>
+      </div>
+    </div>
+
+    <div class="layer L-sim">
+      <div class="layer-head"><span class="dot d-sim"></span><span class="name">Compute &amp; simulation</span><span class="role">— dynamics, perception, collisions (the "sim")</span></div>
+      <div class="chips">
+        <span class="chip"><span class="led d-sim"></span><b>Kinematic JAX env</b><small>fast training substrate · thousands of cars</small></span>
+        <span class="chip"><span class="led d-sim"></span><b>Isaac Sim / Lab</b><small>hi-fi physics execution · low-level controller</small></span>
+        <span class="chip"><span class="led d-sim"></span><b>Geometric sensors</b><small>FOV + occlusion → detection list (no pixels)</small></span>
+        <span class="chip"><span class="led d-sim"></span><b>WheeledLab</b><small>car asset + dynamics recipe</small></span>
+        <span class="chip"><span class="led d-cosmos"></span><b>Antim · Gizmo</b><small>SimReady scene/asset variety</small></span>
+      </div>
+    </div>
+
+    <div class="layer L-loop">
+      <div class="layer-head"><span class="dot d-loop"></span><span class="name">RL training loop</span><span class="role">— experiment → verify → reward → update (detailed below)</span></div>
+      <div class="chips">
+        <span class="chip"><span class="led d-loop"></span><b>MAPPO + CTDE</b><small>shared actor · centralized critic (train-only)</small></span>
+        <span class="chip"><span class="led d-loop"></span><b>PPO-Lagrangian</b><small>dual ascent on the crash constraint</small></span>
+        <span class="chip"><span class="led d-verify"></span><b>Deterministic verifier</b><small>geometric predicates → reward + validity</small></span>
+        <span class="chip"><span class="led d-cosmos"></span><b>Cosmos-Predict</b><small>offline hard-scenario curriculum</small></span>
+        <span class="chip"><span class="led d-cosmos"></span><b>Cosmos-Reason</b><small>secondary plausibility critic (never the reward)</small></span>
+        <span class="chip"><span class="led d-sim"></span><b>Modal</b><small>GPU rollouts + offline Cosmos fan-out</small></span>
+      </div>
+    </div>
+
+    <div class="layer L-render">
+      <div class="layer-head"><span class="dot d-render"></span><span class="name">Render &amp; demo</span><span class="role">— draws per-car poses (id, t, x, y, z, heading)</span></div>
+      <div class="chips">
+        <span class="chip"><span class="led d-render"></span><b>CesiumJS</b><small>browser globe · real 3D terrain + buildings</small></span>
+        <span class="chip"><span class="led d-render"></span><b>Isaac RTX</b><small>cinematic rigid-body hero shot</small></span>
+        <span class="chip"><span class="led d-cosmos"></span><b>Cosmos-Transfer</b><small>photoreal sim→real</small></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RL LOOP -->
+  <h2>The experiment → result → reward → fine-tune loop</h2>
+  <div class="loopwrap">
+    <div class="pipe">
+      <div class="stage"><div class="n">01</div><h4>Experiment</h4><p>Roll out the current policy on a seeded world cohort (seed + scenario + checkpoint).</p></div>
+      <div class="stage"><div class="n">02</div><h4>Result · Trace</h4><p>Log every car's per-step pose + events (crash, off-road, arrival).</p></div>
+      <div class="stage"><div class="n">03</div><h4>Verifier</h4><p>Deterministic geometric pass: arrived? travel time? valid? + constraint costs.</p></div>
+      <div class="stage"><div class="n">04</div><h4>Reward</h4><p>−travel_time, subject to costs ≤ 0 (Constrained MDP).</p></div>
+      <div class="stage"><div class="n">05</div><h4>Fine-tune</h4><p>MAPPO update + Lagrangian λ step. (Policy update — not LLM fine-tuning.)</p></div>
+    </div>
+    <div class="return">↺ next round — harder scenarios from the Cosmos-Predict / Antim curriculum</div>
+  </div>
+
+  <!-- CAR MODEL + CMDP -->
+  <h2>The abstract car &amp; the objective</h2>
+  <div class="duo">
+    <div class="panel">
+      <h3><span class="dot d-sim"></span>Abstract car (immutable record)</h3>
+<pre><span class="key">Car</span>:
+  id
+  origin, destination         <span class="cmt"># per-agent context</span>
+  route: [waypoints]          <span class="cmt"># OSM A* / cached</span>
+  pose:       (x, y, z), heading
+  kinematics: speed, steer, lane
+  progress:   wp_ptr, dist_remaining, travel_time
+  status:     ACTIVE | ARRIVED | CRASHED
+  costs:      crash, off_road, rule   <span class="cmt"># constraints</span>
+
+<span class="key">Action</span>: [accel/brake, steer, lane_change]</pre>
+    </div>
+    <div class="panel">
+      <h3><span class="dot d-verify"></span>Constrained MDP</h3>
+<pre><span class="key">maximize</span>  E[ reward ]
+          reward = <span class="str">−travel_time</span> (+ arrival)
+
+<span class="key">subject to</span>
+  crashes         ≤ 0
+  off_road        = never
+  rule_violations ≤ 0
+
+<span class="cmt"># crash = dense per-agent terminal COST,</span>
+<span class="cmt"># not a whole-run discard (else no gradient).</span>
+<span class="warn"># "valid run" = an eval metric, not the signal.</span></pre>
+    </div>
+  </div>
+
+  <!-- TOOL MAP -->
+  <h2>Tool-role map — one job each</h2>
+  <div class="tools">
+    <div class="tool"><div class="t"><span class="dot d-data"></span>OSMnx / OSM</div><div class="j">Real SF roads, building footprints, zone tags, routing base.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-data"></span>3DEP / Cesium Terrain</div><div class="j">Elevation → per-node z, per-edge grade.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-render"></span>CesiumJS</div><div class="j">Ground-truth 3D terrain + buildings; browser demo viewer.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-sim"></span>Kinematic JAX env</div><div class="j">Fast coordination-policy training substrate.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-sim"></span>Isaac Sim / Lab</div><div class="j">Hi-fi physics execution; frozen low-level controller; cinematic render.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-sim"></span>WheeledLab</div><div class="j">Car asset + dynamics recipe for the low-level controller.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-cosmos"></span>Cosmos-Predict</div><div class="j">Offline adversarial scenario generation → curriculum.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-cosmos"></span>Cosmos-Reason</div><div class="j">Secondary plausibility critic + run QA (never the reward).</div></div>
+    <div class="tool"><div class="t"><span class="dot d-cosmos"></span>Cosmos-Transfer</div><div class="j">Photoreal sim→real demo render.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-cosmos"></span>Antim · Gizmo</div><div class="j">SimReady static scene/asset variety → domain randomization.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-data"></span>Google Maps</div><div class="j">Real route pool, cached once at setup. Never live, never traffic.</div></div>
+    <div class="tool"><div class="t"><span class="dot d-sim"></span>Modal</div><div class="j">GPU compute — training rollouts + offline Cosmos fan-out.</div></div>
+  </div>
+
+  <footer>
+    SmoothRide — "Imagine a world in 2040 where every car is self-driving." · Compute ≠ render · Verifier ≠ critic · Agency ≠ communication.
+  </footer>
+
+</div>
+</body>
+</html>
