@@ -1,0 +1,31 @@
+{
+  "id": "viz-demo",
+  "name": "Visualization / demo layer",
+  "layer": "viz",
+  "kind": "glue-code",
+  "role": "The pitch: show the learning delta — UNTRAINED cars gridlock/crash vs the TRAINED coordination policy flowing smoothly with zero collisions, on the real SF map.",
+  "status": "gap",
+  "decision": "Decide the renderer now — it's the demo. Baseline = the UNTRAINED coordination policy (the 'today's traffic' shadow world), NOT a separate traffic sim. Two render paths: (1) PRIMARY/cinematic = Isaac RTX render of the rigid-body cars (high-level policy -> frozen low-level controller); (2) ALWAYS-WORKS fallback = log trajectories (car_id,t,x,y,heading) and render with deck.gl TripsLayer on a Mapbox SF basemap. Build the deck.gl path first so you always have a demo, then layer Isaac on top if the box holds.",
+  "license": "your code (deck.gl BSD)",
+  "language": "Python + JS/web",
+  "inputs": [
+    "trained coordination-policy trajectories (from kinematic-env and/or Isaac)",
+    "untrained-policy trajectories (the baseline/shadow world)",
+    "SF basemap + road geometry (osmnx/Mapbox)"
+  ],
+  "outputs": [
+    "two-worlds overlay: untrained (low opacity, crashes/gridlock) vs trained (full opacity, smooth)",
+    "live reward-component counters (crashes=0, idle-time down, detour)"
+  ],
+  "upstream": ["marl-framework", "modal", "isaac-lab"],
+  "downstream": [],
+  "design_notes": [
+    "The baseline is FREE and HONEST: just run the policy at an early/zero checkpoint -> real gridlock/crashes. The delta to the trained policy IS the story.",
+    "Render OFFLINE from logged trajectories — do not render live inside the training loop.",
+    "deck.gl TripsLayer is purpose-built for animated vehicle trajectories on a map; sells 'real San Francisco'.",
+    "Isaac render = the cinematic upgrade (real physics), gated on the RTX/L40S box."
+  ],
+  "risks": ["under-budgeting demo polish (it's the whole pitch)", "depending solely on Isaac -> build the deck.gl fallback first"],
+  "effort": "1-2 days (do not skimp)",
+  "sources": ["https://deck.gl/docs/api-reference/geo-layers/trips-layer"]
+}

@@ -1,0 +1,29 @@
+{
+  "id": "terrain-dem",
+  "name": "Elevation / DEM layer (SF hills)",
+  "layer": "data-map",
+  "kind": "dataset",
+  "role": "Supply elevation so SF's hills are real: drape the road network over a Digital Elevation Model to get a z per node and a grade per edge.",
+  "status": "gap",
+  "decision": "Pull a DEM (USGS 3DEP 1m/10m, or SRTM 30m) for the SF bbox. Sample it at each OSMnx node -> node z; finite-difference along edges -> per-edge grade. Feed grade into BOTH layers: road-mesh-builder drapes roads on the DEM for a 2.5D hilly Isaac mesh, and the kinematic env uses grade as a speed/accel modifier + an obs scalar so coordination accounts for hill timing.",
+  "license": "USGS 3DEP public domain; SRTM public domain",
+  "language": "Python (rasterio / py3dep / elevation)",
+  "inputs": ["SF bbox", "OSMnx node coords"],
+  "outputs": ["node elevation z (m)", "per-edge grade (rise/run)", "DEM raster for terrain mesh"],
+  "upstream": ["osmnx"],
+  "downstream": ["road-mesh-builder", "kinematic-env", "lowlevel-controller"],
+  "why_both_layers": [
+    "Physical: terrain mesh in Isaac so the car physically climbs/descends; WheeledLab's elevation task = the slope-handling low-level skill.",
+    "Behavioral: uphill is slower / downhill needs longer braking -> grade changes timing, which the coordination policy must see (scalar obs) to plan."
+  ],
+  "risks": [
+    "DEM resolution vs OSM positional noise -> smooth grades",
+    "draping introduces z-discontinuities at junctions -> clean before meshing",
+    "Isaac USD terrain collider pitfalls (objects falling through) -> verify contacts"
+  ],
+  "effort": "1 day (sampling + grade) + meshing time on the Isaac side",
+  "sources": [
+    "https://www.usgs.gov/3d-elevation-program",
+    "https://github.com/cheginit/py3dep"
+  ]
+}

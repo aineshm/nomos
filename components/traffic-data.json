@@ -1,0 +1,33 @@
+{
+  "id": "traffic-data",
+  "name": "SF car-count / density data (PeMS + AADT + LODES)",
+  "layer": "data-map",
+  "kind": "dataset",
+  "role": "Estimate 'how many cars on the road in area Y at time Z' to seed the number of agents and their spatial density in the sim.",
+  "status": "recommended",
+  "decision": "Primary: Caltrans PeMS (real 5-min freeway counts, free account — register a few days early). Pair with Caltrans AADT x an hourly K-factor curve for a per-hour baseline that needs no live feed. Use LODES/SFMTA to shape surface-street direction/volume. Be explicit in the demo that counts are modeled/aggregate, not live per-street.",
+  "license": "public-domain / open government data",
+  "inputs": ["area / time-of-day"],
+  "outputs": ["vehicle counts (PeMS, 5-min, freeway-only)", "annual avg daily traffic (AADT)", "commute O-D flows (LODES)", "spot counts (SFMTA)"],
+  "upstream": [],
+  "downstream": ["kinematic-env", "reward-system"],
+  "options": [
+    {"name": "Caltrans PeMS", "what": "real vehicle flow/counts/speed at 5-min per detector, Bay Area = District 4 (I-80/US-101/I-280)", "live": true, "access": "free account, 1-2 day approval, UI export (no clean public API)", "caveat": "FREEWAY ONLY"},
+    {"name": "Caltrans AADT", "what": "annual avg daily traffic on state highways", "live": false, "access": "free CSV/GIS"},
+    {"name": "US Census LODES / OnTheMap", "what": "home->work commute O-D flows (workers, not vehicles)", "live": false, "access": "free, no account"},
+    {"name": "SFMTA Traffic Counts", "what": "intersection/corridor counts 2014-2022 (sparse)", "live": false, "access": "free CSV"}
+  ],
+  "alternatives_rejected": ["Uber Movement — DEFUNCT (shut down 2023), archives only"],
+  "risks": [
+    "No public feed gives per-street live counts — set demo expectations accordingly",
+    "PeMS needs an account approved BEFORE the event",
+    "PeMS is freeway-only; surface streets must be inferred"
+  ],
+  "effort": "hours (+ lead time for PeMS account)",
+  "sources": [
+    "https://pems.dot.ca.gov",
+    "https://dot.ca.gov/programs/traffic-operations/census/traffic-volumes",
+    "https://lehd.ces.census.gov/data",
+    "https://www.sfmta.com/reports/traffic-counts"
+  ]
+}

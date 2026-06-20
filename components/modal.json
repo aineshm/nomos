@@ -1,0 +1,33 @@
+{
+  "id": "modal",
+  "name": "Modal (modal.com) — GPU training backend",
+  "layer": "compute",
+  "kind": "managed-service",
+  "role": "Runs the multi-agent coordination training (kinematic JAX env): parallel rollout workers + central learner, checkpointing, scale.",
+  "status": "confirmed-fit",
+  "decision": "USE Modal for the training core. Native fan-out (.spawn_map, up to 1M pending) + modal.Queue/modal.Dict for the rollout-worker/learner fabric + modal.Volume (~2.5GB/s) for checkpoints; 24h/call (resume for longer). Because training is the JAX kinematic env, ANY CUDA GPU works (A100/H100 fine) — no RT Cores needed, so training is cheap and unconstrained.",
+  "license": "commercial (code-first Python SDK)",
+  "language": "Python",
+  "inputs": ["@app.function(gpu=..., image=...) training code", "kinematic-env + reward + MARL config"],
+  "outputs": ["trained coordination-policy checkpoints in modal.Volume", "training logs / learning curves"],
+  "upstream": ["marl-framework"],
+  "downstream": ["isaac-lab", "viz-demo"],
+  "gpu_note": "Training is pure JAX/CUDA on the kinematic env -> any GPU (A100 ~$2.10-2.50/h, H100 ~$3.95, L40S ~$1.95). The RT-Cores constraint only applies to the Isaac DEMO render, which runs on a separate RTX/L40S box (not necessarily Modal).",
+  "topology_example": [
+    "with modal.Queue.ephemeral() as samples, modal.Dict.ephemeral() as weights:",
+    "  rollout_worker.spawn_map(range(64))   # 64 parallel rollout workers",
+    "  # learner pulls samples from queue, pushes weights to dict/volume"
+  ],
+  "risks": [
+    "free tier ~$30/mo is thin for heavy RL -> apply to startup credits; the kinematic env trains in minutes-to-hours so cost stays low",
+    "24h per-call cap -> checkpoint+resume for longer runs",
+    "if you also render the Isaac demo on Modal, test vulkaninfo on an L40S container first"
+  ],
+  "alternatives": ["raw cloud VMs (more ops)"],
+  "effort": "hours to wire up",
+  "sources": [
+    "https://modal.com/pricing",
+    "https://modal.com/docs/guide/gpu",
+    "https://modal.com/docs/guide/scale"
+  ]
+}

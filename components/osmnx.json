@@ -1,0 +1,43 @@
+{
+  "id": "osmnx",
+  "name": "OSMnx",
+  "layer": "data-map",
+  "kind": "oss-library",
+  "role": "Pull the San Francisco drivable road network from OpenStreetMap as a graph — the canonical map for training (kinematic env drives on it), routing/rewards, and the demo geometry.",
+  "status": "confirmed-fit",
+  "decision": "Keep. Use the v2.x API. Load once at init; cache to graphml so you don't re-hit Overpass every run.",
+  "license": "MIT (library code) / ODbL (the OSM data it returns — must attribute OpenStreetMap in any published derivative)",
+  "language": "Python",
+  "version_seen": "2.1.0",
+  "inputs": [
+    "place name e.g. 'San Francisco, California, USA'",
+    "or bbox tuple (west, south, east, north)",
+    "or (lat,lng) + radius",
+    "network_type='drive'"
+  ],
+  "outputs": [
+    "NetworkX MultiDiGraph: nodes = intersections/dead-ends, edges = street segments",
+    "edge attrs: osmid, highway, name, oneway, reversed, length(m), geometry; lanes/maxspeed when tagged (often sparse)",
+    "ox.add_edge_speeds -> speed_kph, ox.add_edge_travel_times -> travel_time",
+    "ox.graph_to_gdfs -> (gdf_nodes, gdf_edges) GeoDataFrames",
+    "save/load graphml, geopackage"
+  ],
+  "upstream": [],
+  "downstream": ["kinematic-env", "road-mesh-builder", "proximity-osm", "reward-system"],
+  "api_notes": [
+    "v2 breaking change: ox.graph_from_bbox takes a SINGLE bbox tuple, not 4 args (most common copy-paste bug from 1.x tutorials).",
+    "Functions are flat in ox.* namespace (ox.graph_from_place, ox.add_edge_speeds, ox.features_from_point).",
+    "lanes/maxspeed are frequently missing in real OSM — impute, don't assume."
+  ],
+  "alternatives": ["raw Overpass API (lower-level, OSMnx wraps it)", "TIGER/Line roads (US Census)"],
+  "risks": [
+    "lanes/maxspeed sparsity -> impute for realistic speeds",
+    "Overpass public endpoint rate limits -> cache the graphml locally",
+    "ODbL attribution on anything you publish"
+  ],
+  "effort": "hours",
+  "sources": [
+    "https://github.com/gboeing/osmnx",
+    "https://osmnx.readthedocs.io/en/stable/getting-started.html"
+  ]
+}

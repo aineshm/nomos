@@ -1,0 +1,40 @@
+# Isaac / WheeledLab physics demo config (consumed by run_isaac_demo.py on a GPU box).
+# Versions are pinned to match WheeledLab: Isaac Sim v4.5.0 + IsaacLab v2.0.2.
+
+sim:
+  dt: 0.005            # physics step (s); 200 Hz rigid-body integration
+  decimation: 4        # controller + render every N physics steps
+  gravity: [0.0, 0.0, -9.81]
+  device: "cuda:0"
+  headless: true       # render offscreen to frames, no interactive window
+
+render:
+  rtx: true            # path-traced RTX hero shot (needs RT Cores)
+  resolution: [1920, 1080]
+  fps: 30
+  camera:
+    mode: "chase"      # chase | orbit | topdown
+    height_m: 35.0
+    pitch_deg: -45.0
+
+car:
+  asset: "wheeledlab/mushr"   # overridden by car_asset stored in the .npz
+  count: null                 # null => N from the setpoints file
+  domain_randomization: false # frozen controller already trained with DR
+
+controller:
+  # frozen single-agent command-tracking policy (trained ONCE in Isaac, then frozen)
+  checkpoint: "runs/lowlevel/controller.pt"
+  framework: "rsl_rl"         # rsl_rl | sb3
+  # what the controller tracks, per car, per control step:
+  setpoint: ["waypoint", "velocity", "heading"]
+
+world:
+  # SF drivable surface as USD (see components/road-mesh-builder); georef via the
+  # origin/crs stored in the setpoints .npz so cars land on the real streets.
+  road_usd: "runs/isaac/sf_downtown.usd"
+  drape_on_dem: false         # true => hills (see components/terrain-dem)
+
+output:
+  frames_dir: "runs/isaac/frames"
+  video: "runs/isaac/hero.mp4"

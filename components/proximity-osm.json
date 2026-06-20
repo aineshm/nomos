@@ -1,0 +1,36 @@
+{
+  "id": "proximity-osm",
+  "name": "OSM proximity / POI layer (Overpass + OSMnx-features + Nominatim)",
+  "layer": "data-map",
+  "kind": "public-api",
+  "role": "Answer the real geospatial questions: 'what's near (lat,lng)?', 'are these roads near schools?', 'what neighborhood is this?'. Feeds caution-zone weighting into the reward.",
+  "status": "recommended",
+  "decision": "Add this. It is the correct primitive for coordinate/radius proximity. Build school/POI masks over the road graph at init so the reward can weight caution near schools/crossings.",
+  "license": "ODbL (OSM data); Overpass/Nominatim public servers free under usage policies",
+  "language": "Python",
+  "inputs": ["(lat,lng) or bbox", "OSM tag filters e.g. {amenity: school}", "radius in meters"],
+  "outputs": [
+    "GeoDataFrame of POIs (schools, hospitals, crossings...) with geometry",
+    "Nominatim reverse-geocode: lat/lng -> neighborhood/suburb/address",
+    "road-near-X boolean masks via geopandas sjoin_nearest (reproject to metric CRS e.g. EPSG:3310)"
+  ],
+  "upstream": ["osmnx"],
+  "downstream": ["reward-system"],
+  "how": [
+    "Overpass true-radius: node/way/relation[amenity=school](around:500,lat,lon); out center;",
+    "OSMnx: ox.features_from_point((lat,lng), tags={'amenity':'school'}, dist=500)  -- NOTE dist is a square bbox half-width, not a circle; post-filter by geodesic distance or use Overpass around: for a true radius",
+    "Nominatim reverse geocode for neighborhood labels (max 1 req/sec, mandatory User-Agent)"
+  ],
+  "alternatives": ["Google Places / Foursquare / Mapbox Search (API key + billing, richer but paid)"],
+  "risks": [
+    "Nominatim public server: 1 req/sec, no bulk -> cache",
+    "Overpass soft limits ~10k queries/day; set a User-Agent",
+    "reproject to a metric CRS before any distance math"
+  ],
+  "effort": "hours",
+  "sources": [
+    "https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL",
+    "https://osmnx.readthedocs.io/en/stable/user-reference.html",
+    "https://nominatim.org/release-docs/latest/api/Reverse/"
+  ]
+}

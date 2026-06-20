@@ -1,0 +1,37 @@
+{
+  "id": "road-mesh-builder",
+  "name": "OSM graph -> drivable geometry (Isaac demo only)",
+  "layer": "simulation",
+  "kind": "glue-code",
+  "role": "Turn OSMnx road centerlines into a flat collision/visual mesh for the Isaac EXECUTION/DEMO world. Training does NOT need this (the kinematic env drives on the graph directly) — it exists only so the physics demo cars have a real SF surface to drive on.",
+  "status": "gap",
+  "decision": "Build it for the demo only, and keep it cheap: flat ground plane + OSMnx centerlines buffered to lane-width ribbons (shapely buffer -> triangulate -> trimesh -> OBJ -> USD via MeshConverter with a TRIANGLE collision approximation). Do NOT attempt faithful 3D multi-lane junctions. If the demo box slips, this can be dropped and you fall back to the kinematic-env render.",
+  "license": "your code; depends on osmnx(MIT)/shapely/trimesh",
+  "language": "Python (shapely, geopandas, trimesh)",
+  "inputs": ["OSMnx gdf_edges (LineString centerlines, lanes, width)"],
+  "outputs": [
+    "road-ribbon mesh OBJ/STL -> USD with collision (triangle approximation, not convex hull)",
+    "aligned so the kinematic-env coordinates match the Isaac world frame"
+  ],
+  "upstream": ["osmnx"],
+  "downstream": ["isaac-lab"],
+  "difficulty_tiers": [
+    {"tier": "EASY (hours)", "scope": "flat plane only; cars follow the kinematic plan, local camera. Enough for a tight hero shot."},
+    {"tier": "MODERATE (1-2 days)", "scope": "buffer+extrude centerlines into a real road ribbon mesh laid on the plane."},
+    {"tier": "HARD (avoid)", "scope": "full 3D multi-lane junctions/elevation. Don't attempt."}
+  ],
+  "alternatives": [
+    "OSM2World / blender-osm to generate OBJ/glTF, clean in Blender",
+    "skip geometry entirely and render the demo from the kinematic env on a deck.gl SF basemap (fallback)"
+  ],
+  "risks": [
+    "Isaac imported-USD colliders dropping in some 2025 builds -> verify contacts",
+    "coordinate-frame alignment between kinematic-env and Isaac world",
+    "do not let mesh fidelity eat the hackathon — it's demo polish, not the RL"
+  ],
+  "effort": "hours (flat) to 1-2 days (ribbon mesh); demo-only",
+  "sources": [
+    "https://isaac-sim.github.io/IsaacLab/main/source/how-to/import_new_asset.html",
+    "https://osm2world.org"
+  ]
+}

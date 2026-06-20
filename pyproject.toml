@@ -1,0 +1,44 @@
+[project]
+name = "smoothride"
+version = "0.1.0"
+description = "Multi-agent RL for a trafficless 2040 San Francisco"
+requires-python = ">=3.10"
+
+# Installed in layers so each vertical slice is verifiable on its own.
+# data:  the map / proximity / traffic ground-truth layer
+# rl:    the kinematic env + MAPPO training (JAX)
+# Install:  pip install -e ".[data,rl]"
+dependencies = []
+
+[project.optional-dependencies]
+data = [
+  "osmnx>=2.0",
+  "networkx>=3.0",
+  "shapely>=2.0",
+  "geopandas>=1.0",
+  "pandas>=2.0",
+  "numpy>=1.26",
+]
+rl = [
+  "jax>=0.4.30",
+  "flax>=0.8",
+  "optax>=0.2",
+  "numpy>=1.26",
+]
+demo = [
+  "matplotlib>=3.8",
+  "pyarrow>=15",
+]
+# lowlevel: only the LOCAL launcher for Modal jobs. Isaac Sim / Isaac Lab /
+# RSL-RL live in the Modal container image (see smoothride/lowlevel/modal_image.py),
+# NOT here — they don't install on macOS. Install:  pip install -e ".[lowlevel]"
+lowlevel = [
+  "modal>=0.64",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["smoothride*"]

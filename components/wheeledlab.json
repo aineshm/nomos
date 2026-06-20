@@ -1,0 +1,33 @@
+{
+  "id": "wheeledlab",
+  "name": "WheeledLab (UW Robot Learning)",
+  "layer": "simulation",
+  "kind": "oss-framework",
+  "role": "Source of the car asset (MuSHR/HOUND) + dynamics/domain-randomization recipe used to train the frozen low-level locomotion controller. Provides the rigid-body 'body' the demo cars use.",
+  "status": "confirmed-fit",
+  "decision": "Use WheeledLab's car USD asset + dynamics/domain-randomization recipe to train the single-agent low-level controller (see lowlevel-controller). Single-agent is exactly right here — the controller only needs locomotion, not coordination. Do NOT expect a ready multi-car policy or a pre-baked setpoint tracker; verify whether any pretrained weights are downloadable, else train the controller from the shipped configs.",
+  "license": "BSD-3-Clause (code); website content CC BY-SA 4.0",
+  "language": "Python (Isaac Lab + rsl_rl / Stable-Baselines3)",
+  "inputs": ["Isaac Sim v4.5.0 + IsaacLab v2.0.2"],
+  "outputs": ["car asset (MuSHR/HOUND)", "tuned dynamics + domain randomization recipe", "reference tasks: drifting, elevation, visual nav"],
+  "upstream": [],
+  "downstream": ["lowlevel-controller"],
+  "facts": [
+    "Platforms: MuSHR, HOUND (~1/10 RC cars); F1Tenth coming soon.",
+    "Backend: Isaac Lab on Isaac Sim (pins Isaac Sim v4.5.0 + IsaacLab v2.0.2).",
+    "RL: RSL-RL and Stable-Baselines3 (PPO/SAC).",
+    "Single-agent (verified in env source: one robot per env). Fine for our use — it only supplies locomotion.",
+    "Trains DIRECTLY in full car physics (why its policies transfer zero-shot to real RC cars) -> good template for our low-level controller."
+  ],
+  "uncertainties": ["pretrained checkpoint download links unconfirmed; shipped policies are task-specific, not a generic setpoint tracker -> plan to train the controller yourself"],
+  "risks": [
+    "weights may not be published -> train the low-level controller from configs (single-agent, modest)",
+    "Isaac/PhysX-native -> the low-level controller must run in Isaac (matches the chosen execution engine)"
+  ],
+  "effort": "hours to reuse the asset; folds into the lowlevel-controller training run",
+  "sources": [
+    "https://github.com/UWRobotLearning/WheeledLab",
+    "https://arxiv.org/abs/2502.07380",
+    "https://uwrobotlearning.github.io/WheeledLab/"
+  ]
+}

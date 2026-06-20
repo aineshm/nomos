@@ -1,0 +1,48 @@
+{
+  "id": "kinematic-env",
+  "name": "Kinematic multi-agent driving env (vectorized JAX)",
+  "layer": "simulation",
+  "kind": "glue-code",
+  "role": "The TRAINING substrate. A fast, GPU-vectorized multi-agent driving environment on the real SF road graph where the coordination policy learns. Cars move via a kinematic-bicycle model; the env exposes step(setpoints)->(obs,reward).",
+  "status": "built-v2",
+  "decision": "BUILT in smoothride/env/kinematic.py (JAX, vmap-able). Kinematic-bicycle motion with accel/steer limits; setpoint-style actions for clean transfer to the Isaac low-level controller. v2 implements: per-edge speed limits (highways), multi-lane + lane-change action, lead-vehicle gap (stop-and-go), intersection right-of-way/yielding, unruly pedestrians, continuous respawn (throughput metric), and APF spacing. REMAINING ROADMAP: spatial-hash neighbors for 1000+ cars (currently O(N^2), fine to a few hundred); per-edge grade coupled with terrain-dem; OSM-tied pedestrian crossings.",
+  "license": "your code (JAX Apache-2.0)",
+  "language": "Python (JAX)",
+  "inputs": [
+    "osmnx road graph (lanes/waypoints/oneway) as the drivable network",
+    "num_agents + spatial density from traffic-data",
+    "per-agent HIGH-LEVEL actions = setpoints (target waypoint / velocity / heading)"
+  ],
+  "outputs": [
+    "per-agent observations (ego state + nearby cars + local route)",
+    "collision/near-miss signals (geometric overlap, no physics engine needed)",
+    "trajectories (car_id,t,x,y,heading) for the reward + viz"
+  ],
+  "upstream": ["osmnx", "traffic-data"],
+  "downstream": ["marl-framework", "reward-system"],
+  "why_kinematic": [
+    "The traffic-coordination claim ('zero crashes, no gridlock, no lights') lives at the behavioral level, not tire-slip level.",
+    "Kinematic bicycle is the correct vehicle model for traffic-level behavior and is valid for gentle/normal driving.",
+    "Fully vectorizable in JAX -> orders of magnitude faster than a rigid-body sim -> real RL in hackathon time.",
+    "Eliminates the OSM->3D-collision-mesh dependency for TRAINING (graph-only)."
+  ],
+  "interface_to_physics": [
+    "Action space = setpoints the frozen low-level controller (Isaac) can also consume.",
+    "Match accel/steering-rate limits to the WheeledLab car so the kinematic<->physics tracking gap stays small.",
+    "Keep learned driving gentle (the gap grows with aggressive maneuvers)."
+  ],
+  "alternatives": [
+    "MetaDrive / SMARTS (purpose-built multi-agent driving RL) — consider if you'd rather not hand-build; cost = their API + real-map import friction",
+    "highway-env (too toy, no real maps)"
+  ],
+  "risks": [
+    "kinematic<->physics interface gap if driving gets aggressive -> match dynamics limits, keep gentle",
+    "collision proxy must be calibrated (car footprint) to be a meaningful no-crash signal",
+    "hand-rolled env = you own correctness; budget testing"
+  ],
+  "effort": "2-3 days (the core training-env build)",
+  "sources": [
+    "https://github.com/google-deepmind/jax",
+    "https://hal.science/hal-01520869"
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema_note": "Graph-based context for the SmoothRide stack. Nodes = components (see ./components/<id>.json). Edges = directed dataflow/dependency (from -> to). Updated 2026-06-18 after the hierarchical-control pivot.",
+  "project": "SmoothRide — multi-agent, multi-reward RL for a trafficless 2040 SF",
+  "architecture": "Hierarchical control. TRAIN the multi-agent coordination policy on a fast kinematic env (Modal GPU). EXECUTE/DEMO it on top of a FROZEN low-level locomotion controller (WheeledLab-derived) running rigid-body physics in Isaac. The low-level controller is trained once and is NEVER part of the coordination training loop.",
+  "layers": ["data-map", "simulation", "rl", "compute", "viz"],
+  "status_legend": {
+    "confirmed-fit": "right tool, keep",
+    "recommended": "add / make explicit",
+    "gap": "design requires it but it must be built"
+  },
+  "nodes": [
+    {"id": "osmnx", "name": "OSMnx", "layer": "data-map", "status": "confirmed-fit", "critical_path": true},
+    {"id": "proximity-osm", "name": "OSM proximity (Overpass/features/Nominatim)", "layer": "data-map", "status": "recommended", "critical_path": false},
+    {"id": "traffic-data", "name": "SF car-count data (PeMS/AADT/LODES)", "layer": "data-map", "status": "recommended", "critical_path": false},
+    {"id": "kinematic-env", "name": "Kinematic multi-agent env (JAX)", "layer": "simulation", "status": "recommended", "critical_path": true},
+    {"id": "marl-framework", "name": "MARL (JaxMARL/PettingZoo + MAPPO)", "layer": "rl", "status": "recommended", "critical_path": true},
+    {"id": "reward-system", "name": "Multi-reward + curriculum", "layer": "rl", "status": "recommended", "critical_path": true},
+    {"id": "modal", "name": "Modal (GPU training)", "layer": "compute", "status": "confirmed-fit", "critical_path": true},
+    {"id": "lowlevel-controller", "name": "Frozen low-level controller (WheeledLab-derived)", "layer": "simulation", "status": "recommended", "critical_path": true},
+    {"id": "wheeledlab", "name": "WheeledLab (car asset + recipe)", "layer": "simulation", "status": "confirmed-fit", "critical_path": false},
+    {"id": "isaac-lab", "name": "Isaac Lab (execution/demo)", "layer": "simulation", "status": "confirmed-fit", "critical_path": true},
+    {"id": "road-mesh-builder", "name": "OSM->geometry (demo only)", "layer": "simulation", "status": "gap", "critical_path": false},
+    {"id": "terrain-dem", "name": "Elevation/DEM (SF hills)", "layer": "data-map", "status": "gap", "critical_path": false},
+    {"id": "pedestrians", "name": "Pedestrian agents (unruly)", "layer": "simulation", "status": "gap", "critical_path": false},
+    {"id": "viz-demo", "name": "Visualization/demo", "layer": "viz", "status": "gap", "critical_path": true}
+  ],
+  "edges": [
+    {"from": "osmnx", "to": "kinematic-env", "label": "road graph (drivable network for training)", "type": "dataflow"},
+    {"from": "osmnx", "to": "road-mesh-builder", "label": "centerlines -> demo geometry", "type": "dataflow"},
+    {"from": "osmnx", "to": "proximity-osm", "label": "graph + features query base", "type": "dataflow"},
+    {"from": "osmnx", "to": "reward-system", "label": "Dijkstra shortest-path baseline", "type": "dataflow"},
+    {"from": "proximity-osm", "to": "reward-system", "label": "school/POI caution masks", "type": "dataflow"},
+    {"from": "traffic-data", "to": "kinematic-env", "label": "num_agents / car density", "type": "dataflow"},
+    {"from": "traffic-data", "to": "reward-system", "label": "realistic density context", "type": "dataflow"},
+    {"from": "kinematic-env", "to": "marl-framework", "label": "step(setpoints)->(obs,reward)", "type": "dataflow"},
+    {"from": "kinematic-env", "to": "reward-system", "label": "collision/near-miss signals", "type": "dataflow"},
+    {"from": "reward-system", "to": "marl-framework", "label": "weighted per-agent reward", "type": "dataflow"},
+    {"from": "marl-framework", "to": "modal", "label": "training job (rollout workers + learner)", "type": "dataflow"},
+    {"from": "modal", "to": "isaac-lab", "label": "trained FROZEN coordination policy", "type": "dataflow"},
+    {"from": "modal", "to": "viz-demo", "label": "trained + untrained trajectories", "type": "dataflow"},
+    {"from": "wheeledlab", "to": "lowlevel-controller", "label": "car asset + dynamics recipe", "type": "dependency"},
+    {"from": "marl-framework", "to": "lowlevel-controller", "label": "high-level setpoints (action interface)", "type": "dataflow"},
+    {"from": "lowlevel-controller", "to": "isaac-lab", "label": "frozen steering/throttle controller", "type": "dataflow"},
+    {"from": "road-mesh-builder", "to": "isaac-lab", "label": "drivable USD geometry (demo)", "type": "dataflow"},
+    {"from": "isaac-lab", "to": "viz-demo", "label": "rigid-body car rollouts (cinematic)", "type": "dataflow"},
+    {"from": "marl-framework", "to": "viz-demo", "label": "MARL fleet trajectories (fallback render)", "type": "dataflow"},
+    {"from": "osmnx", "to": "terrain-dem", "label": "node coords to sample elevation", "type": "dataflow"},
+    {"from": "terrain-dem", "to": "road-mesh-builder", "label": "drape roads on DEM (2.5D hilly mesh)", "type": "dataflow"},
+    {"from": "terrain-dem", "to": "kinematic-env", "label": "per-edge grade -> speed/timing", "type": "dataflow"},
+    {"from": "terrain-dem", "to": "lowlevel-controller", "label": "slope dynamics (WheeledLab elevation task)", "type": "dataflow"},
+    {"from": "osmnx", "to": "pedestrians", "label": "foot network / crossings", "type": "dataflow"},
+    {"from": "pedestrians", "to": "kinematic-env", "label": "pedestrian entities to avoid", "type": "dataflow"},
+    {"from": "pedestrians", "to": "viz-demo", "label": "pedestrian trajectories (distinct marker)", "type": "dataflow"}
+  ],
+  "roadmap_kinematic_env": [
+    "multi-lane + lane-change (discrete lane index + lateral offset)",
+    "intersection right-of-way / yielding (no-traffic-lights thesis)",
+    "spatial-hash neighbor finding -> O(N*k) for 200-1000 cars",
+    "per-edge speed limits (highways fast, surface slow) + ramp merging",
+    "longitudinal car-following (lead-gap obs) -> stop-and-go waves",
+    "per-edge grade modifier (SF hills) coupled with terrain-dem"
+  ],
+  "training_runs": [
+    {"name": "low-level controller", "kind": "single-agent", "where": "Isaac + WheeledLab", "note": "trained ONCE, then frozen; turns setpoints into steering/throttle"},
+    {"name": "coordination policy", "kind": "multi-agent (the main event)", "where": "kinematic env on Modal", "note": "MAPPO/IPPO CTDE; real learning curve (crash-rate down, throughput up)"}
+  ],
+  "critical_path": [
+    "osmnx", "kinematic-env", "marl-framework", "reward-system", "modal", "lowlevel-controller", "isaac-lab", "viz-demo"
+  ]
+}

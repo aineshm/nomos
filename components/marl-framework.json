@@ -1,0 +1,33 @@
+{
+  "id": "marl-framework",
+  "name": "Multi-agent RL framework (JaxMARL / PettingZoo + MAPPO/IPPO)",
+  "layer": "rl",
+  "kind": "oss-framework",
+  "role": "Trains the HIGH-LEVEL coordination policy on the kinematic env using CTDE (centralized training, decentralized execution). Output is a shared-parameter policy whose actions are setpoints (waypoint/velocity/heading) — the 'one continuous model' that anticipates and avoids other cars.",
+  "status": "recommended",
+  "decision": "Add explicitly. Use MAPPO or IPPO: a centralized critic sees global state (all cars) at train time; each car acts from local obs at run time. Pair with the JAX kinematic env -> JaxMARL (native JAX, fast). The trained policy is later run FROZEN on top of the low-level controller in Isaac.",
+  "license": "OSS (JaxMARL Apache-2.0, PettingZoo MIT)",
+  "language": "Python (JAX)",
+  "inputs": ["per-agent obs from kinematic-env", "weighted multi-objective reward", "num_agents/density from traffic-data"],
+  "outputs": ["trained decentralized coordination policy (shared weights, setpoint actions)", "learning curve: crash-rate down / throughput up", "checkpoints"],
+  "upstream": ["kinematic-env", "reward-system", "traffic-data"],
+  "downstream": ["modal", "lowlevel-controller", "isaac-lab", "viz-demo"],
+  "design_notes": [
+    "Non-stationarity (env changes as others learn) is THE multi-agent challenge -> CTDE is the standard answer.",
+    "No separate 'predict the other car' model needed: centralized critic + others' states in the obs -> anticipation learned implicitly (= the doc's 'one continuous model, not two entities').",
+    "Shared-parameter homogeneous agents -> scales to many cars cheaply.",
+    "Action space = setpoints, so the SAME policy drives both the kinematic env (training) and the Isaac demo (via the frozen low-level controller).",
+    "Optional: artificial-potential-field reward shaping as an early-learning safety prior."
+  ],
+  "alternatives": ["PettingZoo + RLlib/MARLlib (framework-agnostic)", "MetaDrive/SMARTS built-in MARL if you use their env instead of the custom kinematic one"],
+  "risks": [
+    "reward hacking (idle-forever, circle-driving) -> shape carefully (see reward-system)",
+    "instability with many simultaneously-learning agents -> curriculum, start with few cars",
+    "credit assignment across agents"
+  ],
+  "effort": "2-3 days (core of the project)",
+  "sources": [
+    "https://arxiv.org/pdf/2311.10090",
+    "https://pettingzoo.farama.org"
+  ]
+}

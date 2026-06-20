@@ -1,0 +1,33 @@
+{
+  "id": "isaac-lab",
+  "name": "NVIDIA Isaac Lab / Isaac Sim (execution & demo layer)",
+  "layer": "simulation",
+  "kind": "oss-framework",
+  "role": "Runs the EXECUTION / DEMO only: N rigid-body cars, each driven by the frozen high-level coordination policy -> frozen low-level controller -> car. NOT used for the multi-agent training (that's the kinematic env).",
+  "status": "confirmed-fit",
+  "decision": "Use Isaac for the physics hero shot because WheeledLab is Isaac-native. Instantiate many cars in one scene; each car runs the two frozen policies (no learning at demo time, so single-robot-per-env limits don't bite the training). The coordination policy was trained cheaply on the kinematic env; Isaac only replays it with real physics.",
+  "license": "BSD-3-Clause (Isaac Lab); Isaac Sim proprietary-but-free",
+  "language": "Python 3.11",
+  "inputs": ["drivable geometry from road-mesh-builder (USD)", "car asset (WheeledLab)", "frozen high-level + low-level policies"],
+  "outputs": ["rigid-body car rollouts (RTX-rendered frames + trajectories) for the demo"],
+  "upstream": ["road-mesh-builder", "wheeledlab", "lowlevel-controller"],
+  "downstream": ["viz-demo"],
+  "hard_constraints": [
+    "GPU MUST have RT Cores -> A100/H100/H200/B200 NOT supported. Only RTX-class / L40S / RTX-PRO-6000 work. You need such a box for the demo render.",
+    "Ubuntu 22.04 or Windows 11 only (NO macOS); ~50GB+ disk; 16GB+ VRAM.",
+    "Headless cloud render needs Vulkan/EGL to init -> if rendering on Modal, test vulkaninfo in an L40S container first."
+  ],
+  "scope_note": "Confined to execution/demo keeps Isaac's heavy footprint off the critical training loop. If the demo box falls through, you can still ship the kinematic-env render (see viz-demo) and lose only the physics flair.",
+  "risks": [
+    "Isaac install/setup time -> start it early, it is the long pole for the demo",
+    "imported USD road geometry dropping colliders in some 2025 builds -> verify contacts",
+    "needs a real RTX/L40S machine"
+  ],
+  "alternatives": ["kinematic-env render as a fallback demo if no RTX box is available"],
+  "effort": "hours-to-a-day of setup; only for the demo, not the training",
+  "sources": [
+    "https://isaac-sim.github.io/IsaacLab",
+    "https://docs.isaacsim.omniverse.nvidia.com/latest/installation/requirements.html",
+    "https://isaac-sim.github.io/IsaacLab/main/source/how-to/import_new_asset.html"
+  ]
+}

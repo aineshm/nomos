@@ -1,0 +1,33 @@
+{
+  "id": "lowlevel-controller",
+  "name": "Frozen low-level locomotion controller (WheeledLab-derived)",
+  "layer": "simulation",
+  "kind": "glue-code",
+  "role": "The 'implement on top, not in training' layer. A single-agent command-tracking policy that turns the high-level coordination setpoints (waypoint/velocity/heading) into actual steering+throttle for a rigid-body car in Isaac. Trained ONCE, then FROZEN — never part of the multi-agent training loop.",
+  "status": "recommended",
+  "decision": "Train this once (single-agent, in Isaac, using WheeledLab's car asset + domain-randomization recipe) to track velocity/heading setpoints, then freeze it. At demo time, each car = frozen high-level policy -> this frozen controller -> rigid-body car. Because it is frozen and outside the coordination training, there is NO body-transfer problem — we learn coordination on top of a fixed locomotion skill.",
+  "license": "your code; built on wheeledlab (BSD-3) + Isaac Lab (BSD-3)",
+  "language": "Python (Isaac Lab + rsl_rl / SB3)",
+  "inputs": [
+    "high-level setpoints (target waypoint / velocity / heading) from the trained coordination policy",
+    "ego car state from Isaac"
+  ],
+  "outputs": ["steering + throttle commands to the rigid-body car"],
+  "upstream": ["wheeledlab", "isaac-lab", "marl-framework"],
+  "downstream": ["isaac-lab"],
+  "reality_checks": [
+    "WheeledLab does NOT ship a generic setpoint tracker — its policies are task-specific (drift/elevation/visual-nav) and downloadable weights are unconfirmed.",
+    "So plan to TRAIN this controller yourself (single-agent, fast) using WheeledLab's car + recipe, not download it.",
+    "It runs in Isaac/PhysX (WheeledLab-native) — do not expect Isaac-trained weights to run unchanged elsewhere."
+  ],
+  "risks": [
+    "if WheeledLab weights/asset aren't usable, this becomes a from-scratch locomotion training (still single-agent, modest)",
+    "tracking error feeds the kinematic<->physics gap -> tune limits to match kinematic-env"
+  ],
+  "effort": "1-2 days (one single-agent training run + freeze)",
+  "sources": [
+    "https://github.com/UWRobotLearning/WheeledLab",
+    "https://arxiv.org/abs/2502.07380",
+    "https://arxiv.org/abs/2312.03673"
+  ]
+}

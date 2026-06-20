@@ -1,0 +1,34 @@
+{
+  "id": "reward-system",
+  "name": "Multi-reward design + dynamic weighting (curriculum)",
+  "layer": "rl",
+  "kind": "glue-code",
+  "role": "Define and dynamically weight the reward the coordination policy optimizes in the kinematic env: no-crash (dominant), low-idle/keep-moving, distance/shortest-path, smooth turns.",
+  "status": "recommended",
+  "decision": "Make this an explicit, tunable component. r = w1*(-collision) + w2*(progress_toward_goal) + w3*(-detour_vs_shortest_path) + w4*(turn_smoothness). 'Prioritize rewards dynamically' = curriculum: collision weight dominant first, anneal in efficiency rewards once crash-rate drops.",
+  "license": "your code",
+  "language": "Python (JAX)",
+  "inputs": [
+    "collision/near-miss signals from kinematic-env (geometric, calibrated to car footprint)",
+    "progress vs networkx Dijkstra shortest-path baseline (free from the osmnx graph)",
+    "speed/idle time",
+    "school/POI proximity masks (from proximity-osm) to weight caution zones"
+  ],
+  "outputs": ["scalar per-agent reward per timestep", "reward-component telemetry for the demo dashboard"],
+  "upstream": ["osmnx", "proximity-osm", "kinematic-env"],
+  "downstream": ["marl-framework"],
+  "reward_components": [
+    {"name": "no-crash", "sign": "-", "priority": 1, "source": "kinematic-env footprint overlap / near-miss"},
+    {"name": "low-idle / keep-moving", "sign": "+", "priority": 2, "note": "reward PROGRESS toward goal, not raw speed (else cars circle to farm speed)"},
+    {"name": "distance / shortest-path", "sign": "-detour", "priority": 3, "source": "Dijkstra on osmnx graph"},
+    {"name": "turns / smoothness", "sign": "+", "priority": 4, "note": "also keeps driving gentle -> smaller kinematic<->physics gap at demo time"}
+  ],
+  "reward_hacking_watchlist": [
+    "idle forever to avoid all crashes -> idle penalty fixes it",
+    "drive in circles to farm 'moving' reward -> use progress-to-goal not raw speed",
+    "miscalibrated collision footprint -> phantom or missed crashes; calibrate first"
+  ],
+  "risks": ["weight tuning is fiddly", "collision proxy must be calibrated to be a meaningful no-crash signal"],
+  "effort": "1-2 days, ongoing tuning",
+  "sources": ["https://pettingzoo.farama.org", "https://osmnx.readthedocs.io/en/stable/user-reference.html"]
+}

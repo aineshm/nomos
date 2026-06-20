@@ -1,0 +1,449 @@
+{
+  "catalog": {
+    "four_way": {
+      "total": 1718,
+      "by_control": {
+        "signalized": 714,
+        "uncontrolled": 771,
+        "stop": 233
+      }
+    },
+    "three_way": {
+      "total": 1590,
+      "by_control": {
+        "uncontrolled": 1430,
+        "signalized": 95,
+        "stop": 65
+      }
+    },
+    "ramp_merge": {
+      "total": 226,
+      "by_control": {
+        "uncontrolled": 188,
+        "signalized": 36,
+        "stop": 2
+      }
+    },
+    "highway_uturn": {
+      "total": 210,
+      "by_control": {
+        "uncontrolled": 139,
+        "signalized": 71
+      }
+    },
+    "bridge": {
+      "total": 161,
+      "by_control": {
+        "uncontrolled": 123,
+        "signalized": 30,
+        "stop": 8
+      }
+    },
+    "complex": {
+      "total": 83,
+      "by_control": {
+        "signalized": 50,
+        "uncontrolled": 26,
+        "stop": 7
+      }
+    }
+  },
+  "representatives": {
+    "four_way": [
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 330660359,
+        "x": 2000.5884905938292,
+        "y": 8122.730440787505,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65291373,
+        "x": 1971.966908804956,
+        "y": 304.9509720993228,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65288654,
+        "x": 706.1285271879751,
+        "y": 964.2814354342408,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65327491,
+        "x": 3741.8213327188278,
+        "y": 1960.2711302558891,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65307844,
+        "x": 332.51934645103756,
+        "y": 3129.52549958881,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65305691,
+        "x": 1709.1328637984116,
+        "y": 512.2399060372263,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65288955,
+        "x": 2802.2097902409732,
+        "y": 3015.6600728817284,
+        "street_count": 4
+      },
+      {
+        "kind": "four_way",
+        "control": "uncontrolled",
+        "node_id": 65341397,
+        "x": 824.4437068032566,
+        "y": 1844.8791020177305,
+        "street_count": 4
+      }
+    ],
+    "three_way": [
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 65345374,
+        "x": 226.87026104715187,
+        "y": 4373.150825245772,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 65369307,
+        "x": 1453.8986354963854,
+        "y": 1822.9892407450825,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 6378899319,
+        "x": 2066.0786173595116,
+        "y": 7149.800711070653,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 288981412,
+        "x": 832.6470863318536,
+        "y": 2368.8162830458023,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 2304626320,
+        "x": 2302.2996404460864,
+        "y": 5005.088189257309,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 65310240,
+        "x": 2105.7080347308656,
+        "y": 994.2052131351084,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 65343409,
+        "x": 2781.4203717802884,
+        "y": 312.9262115517631,
+        "street_count": 3
+      },
+      {
+        "kind": "three_way",
+        "control": "uncontrolled",
+        "node_id": 358888595,
+        "x": 94.10819595796056,
+        "y": 1054.6713227871805,
+        "street_count": 3
+      }
+    ],
+    "ramp_merge": [
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 65283638,
+        "x": 3258.0038385642692,
+        "y": 4336.244926205836,
+        "street_count": 3
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 259394878,
+        "x": 3332.592637890717,
+        "y": 4002.5804598340765,
+        "street_count": 3
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 65286435,
+        "x": 2165.2998877415666,
+        "y": 4126.007195807993,
+        "street_count": 3
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 65281270,
+        "x": 1967.607722605695,
+        "y": 1558.7919347723946,
+        "street_count": 3
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 767815833,
+        "x": 3070.054358220659,
+        "y": 4650.780420330819,
+        "street_count": 3
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 65282200,
+        "x": 2332.5641274187947,
+        "y": 2332.7877487293445,
+        "street_count": 3
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 65282365,
+        "x": 2037.1941155041568,
+        "y": 1388.3645371641032,
+        "street_count": 4
+      },
+      {
+        "kind": "ramp_merge",
+        "control": "uncontrolled",
+        "node_id": 1108824627,
+        "x": 3230.7386183373164,
+        "y": 7694.294916362036,
+        "street_count": 4
+      }
+    ],
+    "highway_uturn": [
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 253103147,
+        "x": 3289.6503252052935,
+        "y": 1033.4064670633525,
+        "street_count": 1
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 65371963,
+        "x": 3083.808910533553,
+        "y": 6459.630811715499,
+        "street_count": 3
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 65310795,
+        "x": 938.2396698360099,
+        "y": 5581.722868157085,
+        "street_count": 3
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 65374289,
+        "x": 1090.8802906896453,
+        "y": 5003.1614798065275,
+        "street_count": 3
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 65349731,
+        "x": 1176.1598819216015,
+        "y": 491.61801118031144,
+        "street_count": 1
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 65333841,
+        "x": 104.76227925019339,
+        "y": 6398.39018758852,
+        "street_count": 1
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 314139502,
+        "x": 1713.2241902627284,
+        "y": 4921.380479616113,
+        "street_count": 3
+      },
+      {
+        "kind": "highway_uturn",
+        "control": "uncontrolled",
+        "node_id": 65346791,
+        "x": 3064.821158978506,
+        "y": 922.2080763974227,
+        "street_count": 1
+      }
+    ],
+    "bridge": [
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 764927374,
+        "x": 1429.651157311513,
+        "y": 802.181494097691,
+        "street_count": 3
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 65283592,
+        "x": 3137.315299866488,
+        "y": 4583.555803299416,
+        "street_count": 3
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 314079692,
+        "x": 2171.422483883798,
+        "y": 4690.045545617584,
+        "street_count": 3
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 1260360822,
+        "x": 2475.2934488459723,
+        "y": 5887.299135000911,
+        "street_count": 3
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 293818722,
+        "x": 3761.6320475974353,
+        "y": 2669.283455883153,
+        "street_count": 3
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 295222216,
+        "x": 2229.3191388538107,
+        "y": 4473.676802968141,
+        "street_count": 3
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 65290207,
+        "x": 3335.1237903016154,
+        "y": 6572.048374576494,
+        "street_count": 4
+      },
+      {
+        "kind": "bridge",
+        "control": "uncontrolled",
+        "node_id": 258888572,
+        "x": 2311.647184257745,
+        "y": 2593.0730745675974,
+        "street_count": 3
+      }
+    ],
+    "complex": [
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 258758535,
+        "x": 510.49954363517463,
+        "y": 8251.12085510837,
+        "street_count": 5
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 293820891,
+        "x": 3553.766256574192,
+        "y": 5499.069534514565,
+        "street_count": 5
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 65313437,
+        "x": 2589.3191643771715,
+        "y": 4567.988827316556,
+        "street_count": 5
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 65290185,
+        "x": 3552.937344573671,
+        "y": 6797.395153036341,
+        "street_count": 5
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 65313186,
+        "x": 3584.2793068056926,
+        "y": 3935.4940882097,
+        "street_count": 5
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 65318098,
+        "x": 328.6114959893748,
+        "y": 1968.5903590605594,
+        "street_count": 6
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 9691602674,
+        "x": 638.1649298770353,
+        "y": 7438.749650262296,
+        "street_count": 5
+      },
+      {
+        "kind": "complex",
+        "control": "uncontrolled",
+        "node_id": 9691602649,
+        "x": 758.3080364384223,
+        "y": 6720.168022048194,
+        "street_count": 5
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+data_cache/*.graphml
+data_cache/*.parquet
+data_cache/*.gpkg
+checkpoints/
+runs/
+*.log
+.DS_Store
+
+# local Mapbox token (not committed)
+smoothride/demo/web/config.js
+
+# generated cache & build metadata
+cache/
+*.egg-info/

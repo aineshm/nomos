@@ -1,0 +1,26 @@
+{
+  "id": "pedestrians",
+  "name": "Pedestrian agents (unruly crossers)",
+  "layer": "simulation",
+  "kind": "glue-code",
+  "role": "A second, non-vehicle agent class the cars must predict and avoid: stochastic walkers that jaywalk and cross roads unpredictably.",
+  "status": "built-v1",
+  "decision": "BUILT (scripted v1) in smoothride/env/kinematic.py: M pedestrians random-walk with occasional darts and reflect off world bounds; cars observe the nearest pedestrian and a ped-hit applies a severe asymmetric penalty (w_ped) plus an APF proximity term (w_ped_prox). Next: give pedestrians their own policy for genuine unpredictability, and tie them to OSM crossings/foot network.",
+  "license": "your code",
+  "language": "Python (JAX)",
+  "inputs": ["sidewalk / crossing geometry from OSM (foot network)", "spawn density"],
+  "outputs": ["pedestrian positions/velocities (fed into car observations)", "pedestrian-collision signal (severe penalty)"],
+  "upstream": ["osmnx", "kinematic-env"],
+  "downstream": ["kinematic-env", "reward-system", "viz-demo"],
+  "design_notes": [
+    "Direct callback to the hotel-robot prior: predict where a moving person will be and avoid the space-time overlap.",
+    "Asymmetric penalty encodes that a pedestrian collision is categorically worse than a fender-bender.",
+    "Pedestrians render as a distinct color/marker so the artifact clearly shows cars yielding to people."
+  ],
+  "risks": [
+    "too-unruly pedestrians make the task unlearnable -> tune unpredictability",
+    "extra agent class enlarges the neighbor computation (couples with spatial-hashing scale work)"
+  ],
+  "effort": "1-2 days (scripted v1)",
+  "sources": ["https://wiki.openstreetmap.org/wiki/Key:highway#Pedestrians"]
+}
