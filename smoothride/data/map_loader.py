@@ -8,12 +8,15 @@ bicycle model and collision footprints can work in real-world units.
 """
 from __future__ import annotations
 
+import dataclasses
 import os
 from dataclasses import dataclass
 
 import networkx as nx
 import numpy as np
 import osmnx as ox
+
+from . import elevation as _elev
 
 # A small, dense downtown-SF box keeps iteration fast. Order is OSMnx 2.x:
 # bbox = (west, south, east, north) = (left, bottom, right, top).
@@ -34,6 +37,8 @@ class RoadNetwork:
     edge_speed_kph: np.ndarray      # (E,) speed limit (imputed where missing)
     G: nx.MultiDiGraph              # the projected graph (for routing / Dijkstra)
     origin: tuple[float, float]     # (x0, y0) subtracted to keep coords small
+    node_z: np.ndarray | None = None        # (N,) elevation (m), None until attached
+    edge_grade: np.ndarray | None = None    # (E,) rise/run, None until attached
 
     @property
     def n_nodes(self) -> int:
@@ -116,6 +121,27 @@ def to_road_network(G: nx.MultiDiGraph) -> RoadNetwork:
         G=Gp,
         origin=origin,
     )
+
+
+def attach_elevation(net: RoadNetwork, source: str = "3dep") -> RoadNetwork:
+    """Return a NEW RoadNetwork with node_z + edge_grade populated.
+
+    source="synthetic" uses a deterministic offline hill field (tests / no net).
+    source="3dep" samples real USGS 3DEP at each node (needs network + net.G crs).
+    """
+    if source == "synthetic":
+        node_z = _elev.synthetic_elevation(net.node_xy)
+    elif source == "3dep":
+        from pyproj import Transformer
+        tf = Transformer.from_crs(net.G.graph["crs"], "EPSG:4326", always_xy=True)
+        east = net.node_xy[:, 0] + net.origin[0]
+        north = net.node_xy[:, 1] + net.origin[1]
+        lon, lat = tf.transform(east, north)
+        node_z = _elev.fetch_node_elevation(np.column_stack([lon, lat]))
+    else:
+        raise ValueError(f"unknown elevation source: {source!r}")
+    grade = _elev.edge_grades(node_z, net.edges, net.edge_length)
+    return dataclasses.replace(net, node_z=node_z, edge_grade=grade)
 
 
 def load_road_network(**kwargs) -> RoadNetwork:
