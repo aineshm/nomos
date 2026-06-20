@@ -18,6 +18,11 @@ data = [
   "geopandas>=1.0",
   "pandas>=2.0",
   "numpy>=1.26",
+  "pyproj>=3.6",
+  "py3dep>=0.16",
+]
+dev = [
+  "pytest>=8.0",
 ]
 rl = [
   "jax>=0.4.30",
