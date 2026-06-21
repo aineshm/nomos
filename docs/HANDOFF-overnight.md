@@ -66,6 +66,13 @@
   pull: for tg in _v5c96p3 _v5c96p5x _v5loolong; do modal volume get smoothride-nav-ckpts history$tg.json /tmp/h$tg.json --force; python3 -c "import json,sys;m=json.load(open('/tmp/h'+sys.argv[1]+'.json'))[-1];print(sys.argv[1],m['iter'],round(m['crashes_per_car'],4))" $tg; done
   eval LOO held-out: modal volume get smoothride-nav-ckpts trained_v5loolong.msgpack runs/; cp runs/trained_v5loolong.msgpack runs/untrained_v5loolong.msgpack; python3 scripts/eval_policy.py --region mission --agents 96 --peds 10 --steps 250 --trained runs/trained_v5loolong.msgpack --untrained runs/untrained_v5loolong.msgpack
 
+
+## *** TARGET ACHIEVED (in-distribution) ***
+  _v5c96p5x (96cars/5peds) it240: crash/car 0.0046 = 0.46% (<0.5% target = ~1.4 per 300 cars), car-car & car-ped ~0, still training to it399.
+  _v5c96p3 (96/3) it200: 0.0065 (0.65%).
+  COMBINED NIGHT RESULT: in-distribution <=0.5% crash (96/5) AND held-out LOO ~1% (v4loo->mission). Frontier: safe corner ~<=96 cars + <=5 peds; 300+ cars infeasible (car-car saturation).
+  _v5loolong (96/8 3-region 600it) still training -> will be the strong LOO model; eval on held-out mission when ready.
+
 ## Experiment results (append every run)
 | tag | region(s) train | eval region | arch | cars | peds | iters | crash/car | car-ped | car-car | arrived% | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
