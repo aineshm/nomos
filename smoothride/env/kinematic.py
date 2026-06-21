@@ -60,9 +60,17 @@ class Env:
     wp_radius: float = struct.field(pytree_node=False, default=9.0)
     # collision_radius MUST be < lane_width, else adjacent-lane cars "collide"
     collision_radius: float = struct.field(pytree_node=False, default=2.2)
-    ped_radius: float = struct.field(pytree_node=False, default=2.2)
+    ped_radius: float = struct.field(pytree_node=False, default=3.5)
     ped_speed: float = struct.field(pytree_node=False, default=1.4)
     prox_radius: float = struct.field(pytree_node=False, default=6.0)
+    cruise_cap: float = struct.field(pytree_node=False, default=7.0)
+    r_yield: float = struct.field(pytree_node=False, default=9.0)
+    # prebuilt deterministic pedestrian paths (host-built in make_env)
+    ped_paths: jnp.ndarray = None
+    ped_cum: jnp.ndarray = None
+    ped_starts: jnp.ndarray = None
+    cross_lo: jnp.ndarray = None
+    cross_hi: jnp.ndarray = None
     lead_cone: float = struct.field(pytree_node=False, default=30.0)
     junc_zone: float = struct.field(pytree_node=False, default=14.0)
     idle_speed: float = struct.field(pytree_node=False, default=0.5)
@@ -104,6 +112,8 @@ class State:
     goals: jnp.ndarray
     ped_pos: jnp.ndarray
     ped_dir: jnp.ndarray
+    ped_vel: jnp.ndarray
+    ped_crossing: jnp.ndarray
     t: jnp.ndarray
 
 
@@ -216,17 +226,21 @@ def _observe(env: Env, st: State, cand) -> jnp.ndarray:
     return jnp.concatenate([ego, lane_frac[:, None], nbr_feat, ped_feat], -1)
 
 
-def _ped_step(env: Env, st: State, key):
-    kd, kj = jax.random.split(key)
-    turn = jax.random.normal(kd, (env.n_peds,)) * 0.3
-    dart = (jax.random.uniform(kj, (env.n_peds,)) < 0.02).astype(jnp.float32)
-    ped_dir = _wrap(st.ped_dir + turn + dart * jax.random.normal(kd, (env.n_peds,)))
-    step = env.ped_speed * env.dt * jnp.stack([jnp.cos(ped_dir), jnp.sin(ped_dir)], -1)
-    ped_pos = jnp.clip(st.ped_pos + step, env.world_min, env.world_max)
-    flip = (st.ped_pos + step < env.world_min) | (st.ped_pos + step > env.world_max)
-    ped_dir = jnp.where(flip[:, 0], jnp.pi - ped_dir, ped_dir)
-    ped_dir = jnp.where(flip[:, 1], -ped_dir, ped_dir)
-    return ped_pos, _wrap(ped_dir)
+def _ped_step(env: Env, st: State):
+    """Deterministic ped motion: position is a pure function of time along the
+    prebuilt polyline. No RNG. Returns (pos, vel, dir, crossing)."""
+    from .ped_paths import arc_interp
+    walked = (jnp.maximum(0, st.t - env.ped_starts).astype(jnp.float32)
+              * env.ped_speed * env.dt)
+    ped_pos = arc_interp(env.ped_paths, env.ped_cum, walked)
+    # velocity from a small finite-difference lookahead along the arc
+    ahead = arc_interp(env.ped_paths, env.ped_cum, walked + env.ped_speed * env.dt)
+    delta = ahead - ped_pos
+    moving = (walked > 0) & (walked < env.ped_cum[:, -1])
+    ped_vel = jnp.where(moving[:, None], delta / env.dt, 0.0)
+    ped_dir = jnp.arctan2(ped_vel[:, 1], ped_vel[:, 0])
+    crossing = (walked >= env.cross_lo) & (walked <= env.cross_hi) & moving
+    return ped_pos, ped_vel, _wrap(ped_dir), crossing
 
 
 def _place_cars(env: Env, key: jax.Array):
@@ -263,33 +277,10 @@ def _place_cars(env: Env, key: jax.Array):
     return ridx, pos, head, wp
 
 
-def _place_peds(env: Env, key: jax.Array, car_pos):
-    """Place pedestrians uniformly but never within (ped+collision) radius of a car."""
-    m = env.n_peds
-    sep = env.ped_radius + env.collision_radius
-
-    def sample(k):
-        return jax.random.uniform(k, (m, 2), minval=env.world_min, maxval=env.world_max)
-
-    def body(_, carry):
-        key, ped = carry
-        d = jnp.linalg.norm(ped[:, None, :] - car_pos[None, :, :], axis=-1)
-        conflict = jnp.any(d < sep, axis=1)
-        key, ks = jax.random.split(key)
-        ped = jnp.where(conflict[:, None], sample(ks), ped)
-        return key, ped
-
-    key, k0 = jax.random.split(key)
-    _, ped = jax.lax.fori_loop(0, env.spawn_tries, body, (key, sample(k0)))
-    return ped
-
-
 def reset(env: Env, key: jax.Array):
-    kc, kp, kpd = jax.random.split(key, 3)
     n = env.n_agents
-    route_idx, pos, heading, wp = _place_cars(env, kc)
-    ped_pos = _place_peds(env, kpd, pos)
-    st = State(
+    route_idx, pos, heading, wp = _place_cars(env, key)
+    st0 = State(
         pos=pos, heading=heading, speed=jnp.zeros(n),
         route_idx=route_idx, wp_ptr=wp, lane=jnp.zeros(n, jnp.int32),
         just_crashed=jnp.zeros(n, bool), crashes=jnp.zeros(n, jnp.int32),
@@ -298,23 +289,28 @@ def reset(env: Env, key: jax.Array):
         # finite cohort; see docs/HANDOFF-sim-contract.md §0.
         spawn_grace=jnp.full(n, SPAWN_GRACE, jnp.int32),
         arrived=jnp.zeros(n, bool), goals=jnp.zeros(n, jnp.int32),
-        ped_pos=ped_pos,
-        ped_dir=jax.random.uniform(kp, (env.n_peds,), minval=-jnp.pi, maxval=jnp.pi),
+        ped_pos=env.ped_paths[:, 0, :],
+        ped_dir=jnp.zeros(env.n_peds),
+        ped_vel=jnp.zeros((env.n_peds, 2)),
+        ped_crossing=jnp.zeros(env.n_peds, bool),
         t=jnp.array(0, jnp.int32),
     )
+    ped_pos, ped_vel, ped_dir, crossing = _ped_step(env, st0)
+    st = st0.replace(ped_pos=ped_pos, ped_vel=ped_vel, ped_dir=ped_dir,
+                     ped_crossing=crossing)
     return st, _observe(env, st, _candidates(env, st.pos))
 
 
 def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     N = env.n_agents
-    _, _, kped = jax.random.split(key, 3)   # (respawn RNG retired; peds still need a key)
 
     accel = jnp.clip(action[:, 0], -1, 1) * env.accel_max
     delta = jnp.clip(action[:, 1], -1, 1) * env.steer_max
     lane_cmd = action[:, 2]
 
     vmax = jnp.minimum(env.v_max, env.routes_speed[st.route_idx, st.wp_ptr])
-    speed = jnp.clip(st.speed + accel * env.dt, 0.0, vmax)
+    speed = jnp.clip(st.speed + accel * env.dt, 0.0,
+                     jnp.minimum(vmax, env.cruise_cap))   # cruise cap
     heading = _wrap(st.heading + (speed / env.wheelbase) * jnp.tan(delta) * env.dt)
     pos = st.pos + speed[:, None] * jnp.stack([jnp.cos(heading), jnp.sin(heading)], -1) * env.dt
 
@@ -377,7 +373,7 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     lane = jnp.where(done, st.lane, lane)
     speed = jnp.where(done_after, 0.0, speed)
     spawn_grace = jnp.maximum(st.spawn_grace - 1, 0)
-    ped_pos, ped_dir = _ped_step(env, st, kped)
+    ped_pos, ped_vel, ped_dir, ped_crossing = _ped_step(env, st)
 
     # CMDP reward (§9): efficiency only — progress along route, arrival bonus, and a
     # small per-step time cost. Crash/lane/proximity constraints are scored by the
@@ -392,7 +388,8 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     nst = State(pos=pos, heading=heading, speed=speed, route_idx=st.route_idx,
                 wp_ptr=wp_ptr, lane=lane, just_crashed=crash_event, crashes=crashes,
                 spawn_grace=spawn_grace, arrived=arrived,
-                goals=goals, ped_pos=ped_pos, ped_dir=ped_dir, t=t)
+                goals=goals, ped_pos=ped_pos, ped_dir=ped_dir,
+                ped_vel=ped_vel, ped_crossing=ped_crossing, t=t)
     info = {"just_crashed": crash_event, "crashes": crashes,
             "goals": goals, "total_goals": goals.sum(), "arrived": arrived,
             "arrived_count": arrived.sum(), "done": done_after,
@@ -401,11 +398,16 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     return nst, _observe(env, nst, _candidates(env, pos)), reward, t >= env.max_steps, info
 
 
-def make_env(pool: RoutePool, world_min, world_max, cell_size=35.0, cap=16, **kw) -> Env:
+def make_env(pool: RoutePool, world_min, world_max, cell_size: float = 35.0,
+             cap: int = 16, n_peds: int = 12, seed: int = 0, **kw) -> Env:
     import numpy as np
+    from .ped_paths import build_ped_paths
     seg = np.linalg.norm(np.diff(pool.xy, axis=1), axis=-1)          # (P, W-1)
     cum = np.concatenate([np.zeros((pool.xy.shape[0], 1)), np.cumsum(seg, axis=1)], 1)
     ncx, ncy = spatial.grid_dims(world_min, world_max, cell_size)
+    lane_width = kw.get("lane_width", 3.5)
+    pp = build_ped_paths(np.asarray(pool.xy), np.asarray(pool.n),
+                         np.asarray(pool.lanes), lane_width, n_peds, seed)
     return Env(
         routes_xy=jnp.asarray(pool.xy), routes_n=jnp.asarray(pool.n),
         routes_node=jnp.asarray(pool.node), routes_junc=jnp.asarray(pool.junc),
@@ -413,6 +415,10 @@ def make_env(pool: RoutePool, world_min, world_max, cell_size=35.0, cap=16, **kw
         routes_cum=jnp.asarray(cum, jnp.float32),
         world_min=jnp.asarray(world_min, jnp.float32),
         world_max=jnp.asarray(world_max, jnp.float32),
+        n_peds=n_peds,
+        ped_paths=jnp.asarray(pp.paths), ped_cum=jnp.asarray(pp.cum),
+        ped_starts=jnp.asarray(pp.starts), cross_lo=jnp.asarray(pp.cross_lo),
+        cross_hi=jnp.asarray(pp.cross_hi),
         cell_size=cell_size, cap=cap, ncx=ncx, ncy=ncy,
         cand_C=spatial.candidate_count(cap), **kw,
     )
