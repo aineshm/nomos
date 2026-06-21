@@ -176,6 +176,9 @@ def ped_yield_cost(
         (T, N) float32 array in [0, 1]. Zero when the car is stopped, the nearest
         crossing ped is beyond r_yield, or no ped is in a crossing state.
     """
+    assert r_yield > r_ped, "r_yield must be strictly greater than r_ped"
+    if ped_pos.shape[-2] == 0:
+        return np.zeros(pos.shape[:2], np.float32)
     # d: (T, N, M) — pairwise car-ped distances
     d = np.linalg.norm(pos[:, :, None, :] - ped_pos[:, None, :, :], axis=-1)
     # proximity hinge: 0 outside r_yield, 1 at/inside r_ped
@@ -211,6 +214,8 @@ def step_cost(pos, seg_start, seg_end, lane_count, lane_width, heading, speed,
     if speed_limit is not None:
         cost = cost + (speed > speed_limit + SPEED_EPS).astype(np.float32)
     if ped_pos is not None:
+        if ped_crossing is None:
+            raise ValueError("ped_crossing must be provided when ped_pos is not None")
         cost = cost + ped_yield_cost(pos, speed, ped_pos, ped_crossing,
                                      r_ped, r_yield, cruise_cap)
     return cost
