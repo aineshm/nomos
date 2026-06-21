@@ -1,16 +1,34 @@
 /* SmoothRide Cesium viewer — replays a scene.json (schema v1) of meshed cars on
    3D San Francisco. Terrain + OSM buildings when an ion token is present; flat
-   ellipsoid + our extruded GeoJSON buildings otherwise. */
+   ellipsoid + our extruded GeoJSON buildings otherwise.
+
+   Supports an optional public/manifest.json (written by the training-export
+   script) that lists multiple scene snapshots keyed by training iteration.  When
+   present the HUD exposes a dropdown so the user can switch between snapshots and
+   watch the policy improve.  When absent the viewer falls back to the legacy
+   single-file behaviour (public/scene.json). */
 
 const CFG = window.SMOOTHRIDE_CONFIG || { cesiumIonToken: "" };
 const WORLD = "trained";          // which world to animate
 const CAR_L = 4.6, CAR_W = 2.0, CAR_H = 1.5;   // meters
 
+// ---------------------------------------------------------------------------
+// Viewer-level state (initialised once; scene state is reset per loadScene call)
+// ---------------------------------------------------------------------------
+
+let _viewer = null;          // single Cesium.Viewer instance reused across loads
+let _sceneEntityIds = [];    // IDs of entities added for the current scene (cars, peds, roads, buildings)
+let _clockTickListener = null;  // handle for the per-scene onTick subscription
+
+// ---------------------------------------------------------------------------
+// Bootstrap: create viewer once, then load from manifest or fallback
+// ---------------------------------------------------------------------------
+
 async function main() {
   const hasToken = !!CFG.cesiumIonToken;
   if (hasToken) Cesium.Ion.defaultAccessToken = CFG.cesiumIonToken;
 
-  const viewer = new Cesium.Viewer("cesiumContainer", {
+  _viewer = new Cesium.Viewer("cesiumContainer", {
     terrainProvider: hasToken
       ? await Cesium.createWorldTerrainAsync()
       : new Cesium.EllipsoidTerrainProvider(),
@@ -20,42 +38,94 @@ async function main() {
     baseLayer: hasToken ? undefined : false,
     animation: true, timeline: true, baseLayerPicker: false, geocoder: false,
   });
-  viewer.scene.globe.depthTestAgainstTerrain = true;
-  window.viewer = viewer;   // handy for console debugging (single-viewer app)
+  _viewer.scene.globe.depthTestAgainstTerrain = true;
+  window.viewer = _viewer;   // handy for console debugging (single-viewer app)
 
   if (!hasToken) {
-    viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+    _viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
       url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
       maximumLevel: 19, credit: "© OpenStreetMap contributors",
     }));
   }
 
-  const scene = await (await fetch("public/scene.json", { cache: "no-store" })).json();
+  // OSM Buildings (ion) are viewer-level, loaded once.
+  if (hasToken) {
+    try { _viewer.scene.primitives.add(await Cesium.createOsmBuildingsAsync()); }
+    catch (e) { console.warn("OSM Buildings failed, using per-scene GeoJSON", e); }
+  }
+
+  // Try to load the manifest; fall back to the legacy single scene path.
+  let manifest = null;
+  try {
+    const resp = await fetch("public/manifest.json", { cache: "no-store" });
+    if (resp.ok) {
+      const parsed = await resp.json();
+      if (parsed && Array.isArray(parsed.scenes) && parsed.scenes.length > 0) {
+        manifest = parsed;
+      }
+    }
+  } catch (_) {
+    // manifest absent or malformed — fall back silently
+  }
+
+  const select = document.getElementById("scene-select");
+  const sceneRow = document.getElementById("scene-row");
+
+  if (manifest) {
+    // Populate dropdown with manifest entries (manifest is already sorted by iter).
+    manifest.scenes.forEach((entry) => {
+      const opt = document.createElement("option");
+      opt.value = entry.file;
+      opt.textContent = entry.label;
+      select.appendChild(opt);
+    });
+
+    // Default to the LAST (most-trained) entry.
+    select.selectedIndex = manifest.scenes.length - 1;
+    sceneRow.style.display = "flex";
+
+    select.addEventListener("change", () => {
+      loadScene("public/" + select.value);
+    });
+
+    await loadScene("public/" + manifest.scenes[manifest.scenes.length - 1].file);
+  } else {
+    // Backward-compat: no manifest — load legacy scene.json, keep dropdown hidden.
+    sceneRow.style.display = "none";
+    await loadScene("public/scene.json");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scene loader — fetches one scene file and renders it, replacing the prior scene
+// ---------------------------------------------------------------------------
+
+async function loadScene(path) {
+  clearScene();
+
+  const scene = await (await fetch(path, { cache: "no-store" })).json();
   if (scene.schema_version !== 1) throw new Error("unsupported schema " + scene.schema_version);
   const meta = scene.meta, world = scene.worlds[WORLD];
 
-  // Buildings: prefer Cesium OSM Buildings (ion); else extrude our GeoJSON.
-  if (hasToken) {
-    try { viewer.scene.primitives.add(await Cesium.createOsmBuildingsAsync()); }
-    catch (e) { console.warn("OSM Buildings failed, using GeoJSON", e); addGeoJsonBuildings(viewer, scene); }
-  } else {
-    addGeoJsonBuildings(viewer, scene);
-  }
+  // Per-scene GeoJSON buildings (only used when ion token is absent, since OSM
+  // Buildings are a viewer-level primitive loaded once in main()).
+  const hasToken = !!CFG.cesiumIonToken;
+  if (!hasToken) addGeoJsonBuildings(_viewer, scene);
 
-  drawRoads(viewer, scene.roads);
+  drawRoads(_viewer, scene.roads);
 
   // Time window for playback.
   const start = Cesium.JulianDate.now();
   const stop = Cesium.JulianDate.addSeconds(start, meta.dt * (meta.n_steps - 1), new Cesium.JulianDate());
-  viewer.clock.startTime = start.clone();
-  viewer.clock.stopTime = stop.clone();
-  viewer.clock.currentTime = start.clone();
-  viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
-  viewer.clock.multiplier = 1.0;
-  viewer.timeline.zoomTo(start, stop);
+  _viewer.clock.startTime = start.clone();
+  _viewer.clock.stopTime = stop.clone();
+  _viewer.clock.currentTime = start.clone();
+  _viewer.clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+  _viewer.clock.multiplier = 1.0;
+  _viewer.timeline.zoomTo(start, stop);
 
-  world.cars.forEach((car) => addCar(viewer, car, start, meta));
-  (world.peds || []).forEach((ped) => addPed(viewer, ped, start, meta));
+  world.cars.forEach((car) => addCar(_viewer, car, start, meta));
+  (world.peds || []).forEach((ped) => addPed(_viewer, ped, start, meta));
 
   // HUD — trips and crashed both update LIVE at the current frame (start at 0),
   // not the end-of-run totals (which made "crashed" read non-zero before playback).
@@ -63,13 +133,15 @@ async function main() {
   document.getElementById("trips").textContent = world.trips_series[0];
   document.getElementById("crashed").textContent =
     world.cars.reduce((n, c) => n + (c.crash[0] || 0), 0);
-  viewer.clock.onTick.addEventListener(() => {
-    const frac = Cesium.JulianDate.secondsDifference(viewer.clock.currentTime, start) / meta.dt;
+
+  _clockTickListener = () => {
+    const frac = Cesium.JulianDate.secondsDifference(_viewer.clock.currentTime, start) / meta.dt;
     const f = Math.max(0, Math.min(world.trips_series.length - 1, Math.round(frac)));
     document.getElementById("trips").textContent = world.trips_series[f];
     document.getElementById("crashed").textContent =
       world.cars.reduce((n, c) => n + (c.crash[f] || 0), 0);
-  });
+  };
+  _viewer.clock.onTick.addEventListener(_clockTickListener);
 
   // Frame the city: fit the scene's bounding sphere with a fixed oblique tilt, so
   // the whole street grid fills the view at any bbox size (a fixed-altitude flyTo
@@ -80,10 +152,38 @@ async function main() {
     Cesium.Cartesian3.fromDegrees(wLon, sLat),
     Cesium.Cartesian3.fromDegrees(eLon, nLat),
   ]);
-  viewer.camera.flyToBoundingSphere(sphere, {
+  _viewer.camera.flyToBoundingSphere(sphere, {
     offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-45), sphere.radius * 2.4),
     duration: 0,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Scene cleanup — removes all per-scene entities and the clock-tick listener
+// ---------------------------------------------------------------------------
+
+function clearScene() {
+  // Remove only the entities we added for the previous scene.
+  _sceneEntityIds.forEach((id) => {
+    const entity = _viewer.entities.getById(id);
+    if (entity) _viewer.entities.remove(entity);
+  });
+  _sceneEntityIds = [];
+
+  // Detach the previous onTick handler so it doesn't reference stale data.
+  if (_clockTickListener) {
+    _viewer.clock.onTick.removeEventListener(_clockTickListener);
+    _clockTickListener = null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Entity helpers — each wraps viewer.entities.add and records the returned id
+// ---------------------------------------------------------------------------
+
+function trackEntity(entity) {
+  _sceneEntityIds.push(entity.id);
+  return entity;
 }
 
 function sampledPosition(car, start, meta) {
@@ -103,13 +203,13 @@ function addPed(viewer, ped, start, meta) {
     const when = Cesium.JulianDate.addSeconds(start, t * meta.dt, new Cesium.JulianDate());
     pos.addSample(when, Cesium.Cartesian3.fromDegrees(ped.lng[t], ped.lat[t], (ped.z[t] || 0) + PED_H / 2));
   }
-  viewer.entities.add({
+  trackEntity(viewer.entities.add({
     position: pos,
     cylinder: {
       length: PED_H, topRadius: 0.3, bottomRadius: 0.35,
       material: Cesium.Color.fromCssColorString("#f59e0b"),  // amber, distinct from cars
     },
-  });
+  }));
 }
 
 // Per-car colour by state: red = crashed, green = arrived (trip complete),
@@ -146,7 +246,7 @@ function addCar(viewer, car, start, meta) {
     const hpr = new Cesium.HeadingPitchRoll(-hdg, 0, 0);
     return Cesium.Transforms.headingPitchRollQuaternion(p, hpr);
   }, false);
-  viewer.entities.add({
+  trackEntity(viewer.entities.add({
     position: pos,
     orientation: orientation,
     box: {
@@ -155,19 +255,19 @@ function addCar(viewer, car, start, meta) {
         return carColor(car, frameIndex(car, start, time, meta), meta.vmax);
       }, false)),
     },
-  });
+  }));
 }
 
 function drawRoads(viewer, roads) {
   roads.forEach((seg) => {
-    viewer.entities.add({
+    trackEntity(viewer.entities.add({
       polyline: {
         positions: Cesium.Cartesian3.fromDegreesArrayHeights(
           [seg[0][0], seg[0][1], seg[0][2], seg[1][0], seg[1][1], seg[1][2]]),
         width: 3, material: Cesium.Color.fromCssColorString("#22d3ee").withAlpha(0.9),
         clampToGround: false,
       },
-    });
+    }));
   });
 }
 
@@ -178,14 +278,14 @@ function addGeoJsonBuildings(viewer, scene) {
     const ring = ft.geometry.coordinates[0];
     const flat = [];
     ring.forEach((p) => { flat.push(p[0], p[1]); });
-    viewer.entities.add({
+    trackEntity(viewer.entities.add({
       polygon: {
         hierarchy: Cesium.Cartesian3.fromDegreesArray(flat),
         extrudedHeight: ft.properties.height || 8,
         material: Cesium.Color.fromCssColorString("#1a2230").withAlpha(0.9),
         outline: false,
       },
-    });
+    }));
   });
 }
 
