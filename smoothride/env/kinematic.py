@@ -448,7 +448,8 @@ def make_env(pool: RoutePool, world_min, world_max, cell_size: float = 35.0,
     ncx, ncy = spatial.grid_dims(world_min, world_max, cell_size)
     lane_width = kw.get("lane_width", 3.5)
     pp = build_ped_paths(np.asarray(pool.xy), np.asarray(pool.n),
-                         np.asarray(pool.lanes), lane_width, n_peds, seed)
+                         np.asarray(pool.lanes), np.asarray(pool.junc),
+                         lane_width, n_peds, seed)
     return Env(
         routes_xy=jnp.asarray(pool.xy), routes_n=jnp.asarray(pool.n),
         routes_node=jnp.asarray(pool.node), routes_junc=jnp.asarray(pool.junc),

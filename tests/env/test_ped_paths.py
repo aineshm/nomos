@@ -11,13 +11,35 @@ def simple_net():
     routes_xy = np.array([[[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]]], np.float32)
     routes_n = np.array([3], np.int32)
     routes_lanes = np.array([[2, 2, 2]], np.int32)
-    return routes_xy, routes_n, routes_lanes
+    routes_junc = np.array([[False, False, False]], bool)
+    return routes_xy, routes_n, routes_lanes, routes_junc
+
+
+@pytest.fixture
+def junction_net():
+    """Route with a junction waypoint at index 1 (the middle point)."""
+    routes_xy = np.array([[[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]]], np.float32)
+    routes_n = np.array([3], np.int32)
+    routes_lanes = np.array([[2, 2, 2]], np.int32)
+    # waypoint 1 is a junction
+    routes_junc = np.array([[False, True, False]], bool)
+    return routes_xy, routes_n, routes_lanes, routes_junc
+
+
+@pytest.fixture
+def no_junction_net():
+    """Route with NO junction waypoints — fallback to mid-block crossing."""
+    routes_xy = np.array([[[0.0, 0.0], [50.0, 0.0], [100.0, 0.0]]], np.float32)
+    routes_n = np.array([3], np.int32)
+    routes_lanes = np.array([[2, 2, 2]], np.int32)
+    routes_junc = np.array([[False, False, False]], bool)
+    return routes_xy, routes_n, routes_lanes, routes_junc
 
 
 def test_build_shapes_and_determinism(simple_net):
-    xy, n, lanes = simple_net
-    a = build_ped_paths(xy, n, lanes, lane_width=3.5, n_peds=5, seed=0)
-    b = build_ped_paths(xy, n, lanes, lane_width=3.5, n_peds=5, seed=0)
+    xy, n, lanes, junc = simple_net
+    a = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=5, seed=0)
+    b = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=5, seed=0)
     assert isinstance(a, PedPaths)
     assert a.paths.shape == (5, 4, 2)
     assert a.cum.shape == (5, 4)
@@ -35,15 +57,15 @@ def test_build_shapes_and_determinism(simple_net):
 
 
 def test_starts_staggered_and_bounded(simple_net):
-    xy, n, lanes = simple_net
-    p = build_ped_paths(xy, n, lanes, lane_width=3.5, n_peds=50, seed=1, max_start=60)
+    xy, n, lanes, junc = simple_net
+    p = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=50, seed=1, max_start=60)
     assert p.starts.min() >= 0 and p.starts.max() < 60
     assert len(np.unique(p.starts)) > 1  # actually staggered
 
 
 def test_arc_interp_endpoints_and_midpoint(simple_net):
-    xy, n, lanes = simple_net
-    p = build_ped_paths(xy, n, lanes, lane_width=3.5, n_peds=3, seed=2)
+    xy, n, lanes, junc = simple_net
+    p = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=3, seed=2)
     paths, cum = jnp.asarray(p.paths), jnp.asarray(p.cum)
     # walked=0 -> path start; walked>=total -> path end (clamped)
     at_start = arc_interp(paths, cum, jnp.zeros(3))
@@ -72,3 +94,55 @@ def test_arc_interp_endpoints_and_midpoint(simple_net):
 
     np.testing.assert_allclose(mid_np, expected, atol=1e-4,
                                err_msg="arc_interp midpoint does not match expected interpolated coordinate")
+
+
+def test_junction_crossing_anchored_at_junction_node(junction_net):
+    """Peds must cross at the junction node (waypoint 1 at x=50).
+
+    The crossing-leg midpoint (paths[m,1]+paths[m,2])/2 should have x ≈ 50
+    for all peds, since the only route has its junction at waypoint 1 (x=50,y=0).
+    """
+    xy, n, lanes, junc = junction_net
+    p = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=10, seed=42)
+    # The crossing leg goes from p1 (near sidewalk, at junction) to p2 (far sidewalk).
+    # The midpoint of that leg should be at the junction node's x coord (50).
+    crossing_mid = (p.paths[:, 1, :] + p.paths[:, 2, :]) / 2.0
+    # The junction is at (50, 0). The road is along x-axis, so crossing is perpendicular:
+    # crossing mid should have x ≈ 50 (along-road position) and y near 0 (at the node).
+    np.testing.assert_allclose(crossing_mid[:, 0], 50.0, atol=1.0,
+                               err_msg="Crossing midpoint x should be at junction node x=50")
+    np.testing.assert_allclose(crossing_mid[:, 1], 0.0, atol=1.0,
+                               err_msg="Crossing midpoint y should be at junction node y=0")
+
+
+def test_fallback_no_junctions_produces_valid_paths(no_junction_net):
+    """When a route has NO junction waypoints, fall back to mid-block crossing.
+
+    This must not crash and must produce paths with correct shape and valid intervals.
+    """
+    xy, n, lanes, junc = no_junction_net
+    p = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=8, seed=7)
+    assert p.paths.shape == (8, 4, 2)
+    assert p.cum.shape == (8, 4)
+    assert p.starts.shape == (8,)
+    assert p.cross_lo.shape == (8,) and p.cross_hi.shape == (8,)
+    assert np.all(p.cross_hi > p.cross_lo)
+    assert np.all(p.cum[:, 0] == 0.0)
+    assert np.all(np.diff(p.cum, axis=1) >= -1e-4)
+
+
+def test_determinism_with_junction(junction_net):
+    """Same seed → identical paths, with junction routing active."""
+    xy, n, lanes, junc = junction_net
+    a = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=8, seed=99)
+    b = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=8, seed=99)
+    np.testing.assert_array_equal(a.paths, b.paths)
+    np.testing.assert_array_equal(a.starts, b.starts)
+
+
+def test_cross_lo_hi_are_cum_columns(simple_net):
+    """cross_lo == cum[:,1], cross_hi == cum[:,2] (contract)."""
+    xy, n, lanes, junc = simple_net
+    p = build_ped_paths(xy, n, lanes, junc, lane_width=3.5, n_peds=6, seed=3)
+    np.testing.assert_array_equal(p.cross_lo, p.cum[:, 1])
+    np.testing.assert_array_equal(p.cross_hi, p.cum[:, 2])
