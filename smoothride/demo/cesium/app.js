@@ -145,12 +145,17 @@ async function loadScene(path) {
   document.getElementById("crashed").textContent =
     world.cars.reduce((n, c) => n + (c.crash[0] || 0), 0);
 
+  // Telemetry dashboard — precompute series + run totals, then drive it live.
+  setupDashboard(scene, world, meta);
+  updateDashboard(0);
+
   _clockTickListener = () => {
     const frac = Cesium.JulianDate.secondsDifference(_viewer.clock.currentTime, start) / meta.dt;
     const f = Math.max(0, Math.min(world.trips_series.length - 1, Math.round(frac)));
     document.getElementById("trips").textContent = world.trips_series[f];
     document.getElementById("crashed").textContent =
       world.cars.reduce((n, c) => n + (c.crash[f] || 0), 0);
+    updateDashboard(f);
   };
   _viewer.clock.onTick.addEventListener(_clockTickListener);
 
@@ -202,7 +207,7 @@ function sampledPosition(car, start, meta) {
   const p = new Cesium.SampledPositionProperty();
   for (let t = 0; t < car.lng.length; t++) {
     const when = Cesium.JulianDate.addSeconds(start, t * meta.dt, new Cesium.JulianDate());
-    p.addSample(when, Cesium.Cartesian3.fromDegrees(car.lng[t], car.lat[t], (car.z[t] || 0) + CAR_H / 2));
+    p.addSample(when, Cesium.Cartesian3.fromDegrees(car.lng[t], car.lat[t], ((car.z && car.z[t]) || 0) + CAR_H / 2));
   }
   return p;
 }
@@ -213,7 +218,7 @@ function addPed(viewer, ped, start, meta) {
   const pos = new Cesium.SampledPositionProperty();
   for (let t = 0; t < ped.lng.length; t++) {
     const when = Cesium.JulianDate.addSeconds(start, t * meta.dt, new Cesium.JulianDate());
-    pos.addSample(when, Cesium.Cartesian3.fromDegrees(ped.lng[t], ped.lat[t], (ped.z[t] || 0) + PED_H / 2));
+    pos.addSample(when, Cesium.Cartesian3.fromDegrees(ped.lng[t], ped.lat[t], ((ped.z && ped.z[t]) || 0) + PED_H / 2));
   }
   trackEntity(viewer.entities.add({
     position: pos,
@@ -299,6 +304,141 @@ function addGeoJsonBuildings(viewer, scene) {
       },
     }));
   });
+}
+
+// ===========================================================================
+// Telemetry dashboard — precomputed per-step series + run totals, redrawn each
+// clock tick. Reads the SAME world the 3D viewer animates, so the panel and the
+// scene are always frame-synced. Pure 2D-canvas; no extra dependencies.
+// ===========================================================================
+
+let _dash = null;
+
+function _series(world, meta) {
+  const N = meta.n_steps, n = world.cars.length;
+  const mov = [], jam = [], cr = [], ms = [], cumCrashed = [];
+  const ever = new Set();
+  for (let t = 0; t < N; t++) {
+    let m = 0, j = 0, c = 0, sp = 0, k = 0;
+    world.cars.forEach((car, ci) => {
+      const tt = Math.min(t, car.spd.length - 1);
+      if (car.crash[tt]) { c++; ever.add(ci); }
+      else { if (car.spd[tt] > 0.4) m++; else j++; sp += Math.max(0, car.spd[tt]); k++; }
+    });
+    mov.push(m); jam.push(j); cr.push(c); ms.push(k ? sp / k : 0); cumCrashed.push(ever.size);
+  }
+  return { mov, jam, cr, ms, cumCrashed, trips: world.trips_series };
+}
+
+function _sizeCanvas(c) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+  const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); return x;
+}
+
+function setupDashboard(scene, world, meta) {
+  const N = meta.n_steps, n = world.cars.length, vmax = meta.vmax || 16;
+  const s = _series(world, meta);
+  // baseline (untrained) trips, if this scene carries a second world
+  const ub = scene.worlds.untrained && scene.worlds.untrained !== world
+    ? scene.worlds.untrained.trips_series : null;
+  // run totals (static)
+  let dist = 0, everN = s.cumCrashed[N - 1];
+  for (const car of world.cars) for (const v of car.spd) dist += Math.max(0, v) * meta.dt;
+  const avgMov = s.mov.reduce((a, b) => a + b, 0) / N / n * 100;
+  const avgSpd = s.ms.reduce((a, b) => a + b, 0) / N;
+  document.getElementById("da-crash").textContent = everN + " / " + n;
+  document.getElementById("da-crash").className = everN === 0 ? "ok" : "";
+  document.getElementById("da-mov").textContent = avgMov.toFixed(1) + "%";
+  document.getElementById("da-spd").textContent = avgSpd.toFixed(2) + " m/s";
+  _dash = { N, n, vmax, s, ub, meta, world };
+  // size canvases now and on resize
+  _dash.canvases = ["dc-trips", "dc-fleet", "dc-hist"].map((id) => document.getElementById(id));
+  _dash.ctx = _dash.canvases.map(_sizeCanvas);
+  if (!_dash._resizeBound) {
+    window.addEventListener("resize", () => { if (_dash) _dash.ctx = _dash.canvases.map(_sizeCanvas); });
+    _dash._resizeBound = true;
+  }
+}
+
+function _spdHsl(f) { return `hsl(${Math.max(0, Math.min(1, f)) * 140}, 80%, 52%)`; }
+
+function _lineChart(ctx, series, f) {
+  const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, N = _dash.N;
+  ctx.clearRect(0, 0, w, h);
+  let mx = 1; for (const sr of series) for (const v of sr.data) mx = Math.max(mx, v);
+  ctx.strokeStyle = "rgba(255,255,255,.05)"; ctx.lineWidth = 1;
+  for (let g = 0; g <= 2; g++) { const y = 4 + g / 2 * (h - 12); ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+  for (const sr of series) {
+    if (sr.fill) {
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) { const x = i / (N - 1) * w, y = h - 4 - sr.data[i] / mx * (h - 12); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+      ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fillStyle = sr.fill; ctx.fill();
+    }
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) { const x = i / (N - 1) * w, y = h - 4 - sr.data[i] / mx * (h - 12); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.strokeStyle = sr.col; ctx.lineWidth = 2; ctx.stroke();
+    const cx = f / (N - 1) * w, cy = h - 4 - sr.data[Math.min(f, N - 1)] / mx * (h - 12);
+    ctx.beginPath(); ctx.arc(cx, cy, 3, 0, 7); ctx.fillStyle = sr.col; ctx.fill();
+  }
+  const px = f / (N - 1) * w; ctx.strokeStyle = "rgba(52,211,153,.4)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+  ctx.fillStyle = "rgba(139,155,176,.7)"; ctx.font = "9px ui-monospace, Menlo, monospace";
+  ctx.fillText(String(Math.round(mx)), 3, 11);
+}
+
+function _stackChart(ctx, f) {
+  const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, N = _dash.N, s = _dash.s;
+  ctx.clearRect(0, 0, w, h);
+  const tot = s.mov.map((m, i) => m + s.jam[i] + s.cr[i]), mx = Math.max(1, ...tot);
+  const layer = (arr, base, col) => {
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) { const x = i / (N - 1) * w, y = h - (base[i] + arr[i]) / mx * h; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    for (let i = N - 1; i >= 0; i--) { const x = i / (N - 1) * w, y = h - base[i] / mx * h; ctx.lineTo(x, y); }
+    ctx.closePath(); ctx.fillStyle = col; ctx.fill();
+  };
+  const b1 = s.mov.slice(), b2 = s.mov.map((m, i) => m + s.jam[i]);
+  layer(s.mov, new Array(N).fill(0), "rgba(52,211,153,.55)");
+  layer(s.jam, b1, "rgba(245,158,11,.6)");
+  layer(s.cr, b2, "rgba(239,68,68,.8)");
+  const px = f / (N - 1) * w; ctx.strokeStyle = "rgba(52,211,153,.5)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, h); ctx.stroke();
+}
+
+function _histChart(ctx, f) {
+  const w = ctx.canvas.clientWidth, h = ctx.canvas.clientHeight, B = 8, bins = new Array(B).fill(0);
+  let nn = 0;
+  for (const car of _dash.world.cars) {
+    const tt = Math.min(f, car.spd.length - 1);
+    if (car.crash[tt]) continue;
+    const fr = Math.min(0.999, Math.max(0, car.spd[tt]) / _dash.vmax); bins[Math.floor(fr * B)]++; nn++;
+  }
+  const mx = Math.max(1, ...bins), bw = w / B;
+  ctx.clearRect(0, 0, w, h);
+  for (let i = 0; i < B; i++) {
+    const bh = bins[i] / mx * (h - 14), x = i * bw + 3;
+    ctx.fillStyle = _spdHsl((i + 0.5) / B); ctx.fillRect(x, h - 11 - bh, bw - 6, bh);
+    ctx.fillStyle = "rgba(139,155,176,.6)"; ctx.font = "8px ui-monospace, Menlo, monospace";
+    ctx.fillText(String(Math.round(i / B * _dash.vmax)), x, h - 2);
+  }
+  document.getElementById("dc-hist-n").textContent = nn + " cars";
+}
+
+function updateDashboard(f) {
+  if (!_dash) return;
+  const s = _dash.s, n = _dash.n;
+  const m = s.mov[f], j = s.jam[f], c = s.cr[f], ms = s.ms[f];
+  document.getElementById("d-trips").textContent = s.trips[f];
+  document.getElementById("d-cpc").textContent = (s.cumCrashed[f] / n).toFixed(2);
+  document.getElementById("d-mov").textContent = Math.round(m / n * 100) + "%";
+  document.getElementById("d-spd").textContent = ms.toFixed(1) + " m/s";
+  const setBar = (bar, lab, v) => { document.getElementById(bar).style.width = (v / n * 100) + "%"; document.getElementById(lab).textContent = v; };
+  setBar("df-mov", "dfb-mov", m); setBar("df-jam", "dfb-jam", j); setBar("df-crash", "dfb-crash", c);
+  const trips = [{ data: s.trips, col: "#34d399", fill: "rgba(52,211,153,.10)" }];
+  if (_dash.ub) trips.push({ data: _dash.ub, col: "#f59e0b" });
+  _lineChart(_dash.ctx[0], trips, f);
+  _stackChart(_dash.ctx[1], f);
+  _histChart(_dash.ctx[2], f);
 }
 
 main().catch((e) => { console.error(e); alert("Viewer error: " + e.message); });
