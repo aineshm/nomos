@@ -133,3 +133,5 @@
   consolidated monitor; expect ~1.5-2h (300 cars slow). Round1 (val/slow/att) also finishing for the 96-car points.
 - ROUND 3 (after frontier): take the safe (cars,peds) point, run LOO via --regions across {downtown,mission,nopa,chinatown_fidi}, eval held-out.
 - **BEST SO FAR:** _v4loo (multi-region) => 1% crash on HELD-OUT mission (generalizes). In-distribution: ~0.9% @96/5. Round5 pushing to <=0.5% + longer LOO (_v5loolong). NEXT: when round5 done, pull numbers, eval _v5loolong on held-out mission, render a demo scene, write FINAL SUMMARY here.
+
+## FINAL RUN (may finish ~by 9am): _v6loolow ap-lquNa9APnESZGxwwsXGagw = 96cars/4peds 3-region LOO 800it (aim held-out <=1%). Eval cmd: modal volume get smoothride-nav-ckpts trained_v6loolow.msgpack runs/ ; cp runs/trained_v6loolow.msgpack runs/untrained_v6loolow.msgpack ; python3 scripts/eval_policy.py --region mission --agents 96 --peds 4 --steps 250 --trained runs/trained_v6loolow.msgpack --untrained runs/untrained_v6loolow.msgpack
