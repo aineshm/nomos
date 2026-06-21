@@ -30,7 +30,7 @@ async function main() {
     }));
   }
 
-  const scene = await (await fetch("public/scene.json")).json();
+  const scene = await (await fetch("public/scene.json", { cache: "no-store" })).json();
   if (scene.schema_version !== 1) throw new Error("unsupported schema " + scene.schema_version);
   const meta = scene.meta, world = scene.worlds[WORLD];
 
