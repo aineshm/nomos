@@ -23,3 +23,8 @@ cache/
 # local browser-testing artifacts (Cesium viewer smoke screenshots)
 .playwright-mcp/
 smoothride-*.png
+
+# browser-test screenshots (verification artifacts)
+proof-*.png
+arrival-*.png
+main-cesium-*.png
