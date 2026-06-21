@@ -23,6 +23,9 @@ WRONGWAY_COS = -0.25     # heading-vs-route cosine below this == wrong way (~>10
 IDLE_SPEED = 0.5         # m/s; below this a car isn't "moving" (no wrong-way)
 MAX_LANES = 8            # generous per-segment lane bound; extra slots masked out
 SPEED_EPS = 1e-6         # absorbs float noise in the speed-limit cross-check
+PED_RADIUS = 3.5         # m; hard car-ped keep-out (asymmetric: wider than car-car)
+PED_YIELD_RADIUS = 9.0   # m; outer yield zone where the continuous cost ramps
+CRUISE_CAP = 7.0         # m/s; reference speed for normalizing the yield term
 
 
 def _wrap(angle: np.ndarray) -> np.ndarray:
@@ -148,20 +151,68 @@ def verify(trace: Trace) -> RunVerdict:
     )
 
 
+def ped_yield_cost(
+    pos: np.ndarray,
+    speed: np.ndarray,
+    ped_pos: np.ndarray,
+    ped_crossing: np.ndarray,
+    r_ped: float = PED_RADIUS,
+    r_yield: float = PED_YIELD_RADIUS,
+    cruise_cap: float = CRUISE_CAP,
+) -> np.ndarray:
+    """(T, N) continuous yield cost: ramps with proximity × speed toward a CROSSING
+    ped. Graded (a hinge), not a 0/1 flag, so the optimum is to SLOW, not freeze.
+
+    Args:
+        pos: (T, N, 2) car positions in metres.
+        speed: (T, N) car speeds in m/s.
+        ped_pos: (T, M, 2) pedestrian positions in metres.
+        ped_crossing: (T, M) bool — True only for peds in an active crossing event.
+        r_ped: Hard keep-out radius (m); cost is 1.0 at this distance.
+        r_yield: Outer yield radius (m); cost ramps from 0 at r_yield to 1 at r_ped.
+        cruise_cap: Reference speed (m/s) that normalises the speed factor.
+
+    Returns:
+        (T, N) float32 array in [0, 1]. Zero when the car is stopped, the nearest
+        crossing ped is beyond r_yield, or no ped is in a crossing state.
+    """
+    # d: (T, N, M) — pairwise car-ped distances
+    d = np.linalg.norm(pos[:, :, None, :] - ped_pos[:, None, :, :], axis=-1)
+    # proximity hinge: 0 outside r_yield, 1 at/inside r_ped
+    prox = np.clip((r_yield - d) / (r_yield - r_ped), 0.0, 1.0)
+    # gate: only count peds that are actively crossing
+    prox = np.where(ped_crossing[:, None, :], prox, 0.0)
+    # worst-case ped per car
+    prox = prox.max(axis=-1)                                    # (T, N)
+    # speed factor: zero cost when stopped
+    spd = np.clip(speed / cruise_cap, 0.0, 1.0)
+    return (prox * spd).astype(np.float32)
+
+
 def step_cost(pos, seg_start, seg_end, lane_count, lane_width, heading, speed,
-              spawn_grace, crashed, speed_limit=None) -> np.ndarray:
+              spawn_grace, crashed, speed_limit=None, *, ped_pos=None,
+              ped_crossing=None, r_ped: float = PED_RADIUS,
+              r_yield: float = PED_YIELD_RADIUS,
+              cruise_cap: float = CRUISE_CAP) -> np.ndarray:
     """Per-step CMDP cost (handoff §6) — the signal that drives training.
 
-    cost = crash + off_lane + wrong_way (+ over_speed if a limit is given), each a
-    0/1 indicator summed. Operates on any 2-leading-axis batch ((T,N) for one
-    rollout, (B*T,N) for a vmapped batch), so the same rulebook the verifier grades
-    with is what the policy is optimized against (no divergence)."""
+    cost = crash + off_lane + wrong_way (+ over_speed if a limit is given,
+    + ped_yield if ped_pos is given), each term summed. Operates on any
+    2-leading-axis batch ((T,N) for one rollout, (B*T,N) for a vmapped batch),
+    so the same rulebook the verifier grades with is what the policy is optimised
+    against (no divergence).
+
+    The ped-yield term is optional and backward-compatible: existing callers that
+    do not pass ped_pos / ped_crossing receive identical results to before."""
     _, off_lane, ww = _lane_flags(pos, seg_start, seg_end, lane_count, lane_width,
                                   heading, speed, spawn_grace)
     cost = (np.asarray(crashed, np.float32) + off_lane.astype(np.float32)
             + ww.astype(np.float32))
     if speed_limit is not None:
         cost = cost + (speed > speed_limit + SPEED_EPS).astype(np.float32)
+    if ped_pos is not None:
+        cost = cost + ped_yield_cost(pos, speed, ped_pos, ped_crossing,
+                                     r_ped, r_yield, cruise_cap)
     return cost
 
 
