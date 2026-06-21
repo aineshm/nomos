@@ -146,11 +146,11 @@ def main(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
          steps: int = 300, lagrangian: bool = True, verifier: bool = True,
          cost_target: float = 0.05, region: str = "downtown", tag: str = "",
          wait: bool = False, n_peds: int = 300, cruise_cap: float = 7.0,
-         ped_radius: float = 3.5, cand_cap: int = 16):
+         ped_radius: float = 3.5, cand_cap: int = 16, seed: int = 0):
     kw = dict(iters=iters, worlds=worlds, agents=agents, peds=peds, steps=steps,
               lagrangian=lagrangian, verifier=verifier, cost_target=cost_target,
               region=region, tag=tag, n_peds=n_peds, cruise_cap=cruise_cap,
-              ped_radius=ped_radius, cand_cap=cand_cap)
+              ped_radius=ped_radius, cand_cap=cand_cap, seed=seed)
     if wait:                       # blocking: streams live, dies if the client drops
         print("final metrics:", train.remote(**kw))
         return
