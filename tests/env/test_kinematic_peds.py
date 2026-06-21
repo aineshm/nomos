@@ -84,3 +84,56 @@ def test_ped_crossing_bit_present_in_obs():
     # 5th ped-feature is the crossing bit in {0,1}
     bit = np.asarray(obs["peds"][..., 4])
     assert set(np.unique(bit[np.asarray(obs["peds_mask"])])) <= {0.0, 1.0}
+
+
+def test_ped_advances_one_step_after_first_step():
+    """Regression for the one-step ped/world-clock lag (post-step alignment).
+
+    Before the fix, peds were evaluated at time k while cars advanced to k+1.
+    After the fix, nst.ped_pos is consistent with nst.t (= st.t + 1).
+
+    For a ped with ped_starts == 0:
+      - At reset (t=0):  walked = max(0, 0 - 0) * ped_speed * dt = 0  → path[0]
+      - After one step (nst.t=1): walked = max(0, 1 - 0) * ped_speed * dt > 0
+        → position must differ from path[0] by exactly ped_speed * dt along the arc.
+    """
+    from smoothride.env.ped_paths import arc_interp
+
+    base_env = _env()
+    # Force ped index 0 to start at t=0 so the test is seed-independent.
+    new_starts = jnp.asarray(base_env.ped_starts).at[0].set(0)
+    env = base_env.replace(ped_starts=new_starts)
+    zero_start_idx = 0
+
+    st, _ = K.reset(env, jax.random.PRNGKey(0))
+
+    # After reset the ped must be at path[0] (walked=0 at t=0)
+    p0 = np.asarray(env.ped_paths[zero_start_idx, 0])
+    np.testing.assert_allclose(np.asarray(st.ped_pos[zero_start_idx]), p0, atol=1e-4,
+                               err_msg="ped at t=0 must be at path[0]")
+
+    # Take exactly one step
+    act = jnp.zeros((env.n_agents, env.act_dim))
+    nst, *_ = K.step(env, st, act, jax.random.PRNGKey(0))
+
+    assert int(nst.t) == 1, "nst.t must be 1 after one step"
+
+    # Compute expected post-step position: walked = (t=1 - start=0) * speed * dt
+    walked_expected = np.float32(1) * env.ped_speed * env.dt
+    walked_arr = np.zeros(env.n_peds, np.float32)
+    walked_arr[zero_start_idx] = walked_expected
+    expected_pos = np.asarray(
+        arc_interp(env.ped_paths, env.ped_cum, jnp.asarray(walked_arr))
+    )
+
+    actual_pos = np.asarray(nst.ped_pos[zero_start_idx])
+    np.testing.assert_allclose(
+        actual_pos, expected_pos[zero_start_idx], atol=1e-4,
+        err_msg=(
+            "After one step, ped must be at arc_interp(ped_speed*dt). "
+            "Failure here means peds are still evaluated at t=0 (clock lag)."
+        ),
+    )
+    # Sanity: position must have moved away from path[0]
+    assert np.linalg.norm(actual_pos - p0) > 0.01, \
+        "ped must have left path[0] after one step (clock lag not fixed)"

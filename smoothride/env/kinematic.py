@@ -414,7 +414,7 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     lane = jnp.where(done, st.lane, lane)
     speed = jnp.where(done_after, 0.0, speed)
     spawn_grace = jnp.maximum(st.spawn_grace - 1, 0)
-    ped_pos, ped_vel, ped_dir, ped_crossing = _ped_step(env, st)
+    ped_pos, ped_vel, ped_dir, ped_crossing = _ped_step(env, st.replace(t=st.t + 1))
 
     # CMDP reward (§9): efficiency only — progress along route, arrival bonus, and a
     # small per-step time cost. Crash/lane/proximity constraints are scored by the

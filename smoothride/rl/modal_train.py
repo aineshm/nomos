@@ -13,7 +13,7 @@ One-time:
   pip install modal && modal token new
 
 Run a scaled training (heavy density example):
-  modal run -m smoothride.rl.modal_train --iters 400 --worlds 64 --agents 96 --peds 32
+  modal run -m smoothride.rl.modal_train --iters 400 --worlds 64 --agents 96 --n-peds 32
 
 Pull the trained policy back for rendering:
   modal volume get smoothride-nav-ckpts trained.msgpack runs/trained.msgpack
@@ -90,7 +90,7 @@ def snapshot_name(tag: str, it: int) -> str:
 
 
 @app.function(image=image, gpu=GPU, timeout=TIMEOUT_S, volumes={CKPT_DIR: volume})
-def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
+def train(iters: int = 300, worlds: int = 64, agents: int = 64,
           steps: int = 300, vmax: float = 16.0, routes: int = 1024,
           lagrangian: bool = True, crash_target: float = 0.3, seed: int = 0,
           verifier: bool = True, cost_target: float = 0.05, region: str = "downtown",
@@ -195,13 +195,13 @@ def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
 
 
 @app.local_entrypoint()
-def main(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
+def main(iters: int = 300, worlds: int = 64, agents: int = 64,
          steps: int = 300, lagrangian: bool = True, verifier: bool = True,
          cost_target: float = 0.05, region: str = "downtown", tag: str = "",
          wait: bool = False, n_peds: int = 300, cruise_cap: float = 7.0,
          ped_radius: float = 3.5, cand_cap: int = 16, seed: int = 0,
          snapshot_every: int = 50):
-    kw = dict(iters=iters, worlds=worlds, agents=agents, peds=peds, steps=steps,
+    kw = dict(iters=iters, worlds=worlds, agents=agents, steps=steps,
               lagrangian=lagrangian, verifier=verifier, cost_target=cost_target,
               region=region, tag=tag, n_peds=n_peds, cruise_cap=cruise_cap,
               ped_radius=ped_radius, cand_cap=cand_cap, seed=seed,
