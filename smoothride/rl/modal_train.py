@@ -55,7 +55,7 @@ image = (
 def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
           steps: int = 300, vmax: float = 16.0, routes: int = 1024,
           lagrangian: bool = True, crash_target: float = 0.3, seed: int = 0,
-          tag: str = "") -> dict:
+          verifier: bool = True, cost_target: float = 0.05, tag: str = "") -> dict:
     """Train the shared-weight nav policy; write {untrained,trained}{tag}.msgpack
     to the volume. Returns the final-iteration metrics dict."""
     import json
@@ -91,21 +91,34 @@ def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
     save(ts, f"untrained{tag}.msgpack")             # baseline shadow world
     volume.commit()
 
-    history, lam = [], 10.0
+    # verifier-driven: reward is efficiency-only (§9); ALL constraints (crash, off-lane,
+    # wrong-way, speed) reach the policy via the deterministic verifier's per-step cost,
+    # relabeled onto each rollout (ppo.verifier_cost). lam ascends toward cost_target.
+    # verifier=False falls back to the old crash-only cost / crash_target.
+    history, lam = [], 0.0 if verifier else 10.0
     for it in range(iters):
         key, kc = jax.random.split(key)
         t0 = time.time()
         batch = ppo.collect(env, ts, kc, cfg.n_worlds)
+        if verifier:
+            vcost = ppo.verifier_cost(env, batch)           # (B,T,N), off-device
+            batch = {**batch, "cost": vcost}
+            mean_cost = float(vcost.mean())
         ts, m = ppo.update(env, cfg, ts, batch, lam if lagrangian else 0.0)
         m = {k: float(v) for k, v in m.items()}
         m["iter"], m["sec"] = it, round(time.time() - t0, 2)
+        if verifier:
+            m["verifier_cost"] = round(mean_cost, 4)
         if lagrangian:                              # dual ascent toward the target
-            lam = min(400.0, max(0.0, lam + 3.0 * (m["crashes_per_car"] - crash_target)))
-            m["lam"] = round(lam, 1)
+            signal = mean_cost if verifier else m["crashes_per_car"]
+            target = cost_target if verifier else crash_target
+            lam = min(400.0, max(0.0, lam + 2.0 * (signal - target)))
+            m["lam"] = round(lam, 2)
         history.append(m)
         if it % 10 == 0 or it == iters - 1:
-            lam_s = f"lam {lam:6.1f} | " if lagrangian else ""
-            print(f"it {it:4d} | reward {m['ep_reward']:8.1f} | {lam_s}"
+            lam_s = f"lam {lam:6.2f} | " if lagrangian else ""
+            cost_s = f"vcost {m.get('verifier_cost', 0):.3f} | " if verifier else ""
+            print(f"it {it:4d} | reward {m['ep_reward']:8.1f} | {lam_s}{cost_s}"
                   f"crashes/car {m['crashes_per_car']:.2f} | "
                   f"goals/agent {m['goals_per_agent']:.2f} | {m['sec']}s", flush=True)
             save(ts, f"trained{tag}.msgpack")        # periodic, so renders mid-run
@@ -124,7 +137,9 @@ def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
 
 @app.local_entrypoint()
 def main(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
-         steps: int = 300, lagrangian: bool = True, tag: str = ""):
+         steps: int = 300, lagrangian: bool = True, verifier: bool = True,
+         cost_target: float = 0.05, tag: str = ""):
     metrics = train.remote(iters=iters, worlds=worlds, agents=agents, peds=peds,
-                           steps=steps, lagrangian=lagrangian, tag=tag)
+                           steps=steps, lagrangian=lagrangian, verifier=verifier,
+                           cost_target=cost_target, tag=tag)
     print("final metrics:", metrics)
