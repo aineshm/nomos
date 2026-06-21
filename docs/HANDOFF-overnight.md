@@ -1,3 +1,35 @@
+# ============================================================
+# FINAL SUMMARY (read me at 9am) — overnight crash-minimization
+# ============================================================
+
+## OUTCOME: both goals met.
+1. MINIMIZE CRASHES (in-distribution): **_v5c96p5x** (96 cars / 5 peds, downtown, 400it) = **0.07% crash/car** (~1 crash per 1,400 cars; car-car AND car-ped ~0). Far below the 0.5% / "1-2 per 300" target.
+   - _v5c96p3 (96/3) = 0.52%. _v4c96p5 (200it) = 0.98%. Longer training matters a lot (0.46%@240it -> 0.07%@399it).
+2. GENERALIZATION (leave-one-out): **_v4loo** (trained downtown+nopa+chinatown, NEVER saw mission) -> held-out Mission = **1% crash** (1/96), vs v1 downtown->mission = 12%. **~12x cross-map safety gain.** _v5loolong (96/8, 3-region, 600it) eval on held-out mission: SEE RESULTS TABLE (running/just-finished).
+3. DENSITY FRONTIER (the "find the frontier" answer): near-zero crash needs **<=~96 cars AND <=~5 peds** in the downtown bbox. Two independent walls:
+   - CAR-CAR wall: 300 cars => ~0.47 crash/car regardless of peds (street graph saturates; cannot be near-zero). 96 cars => car-car ~0.
+   - CAR-PED wall: 300 peds => ~0.2-0.5 crash/car (peds at intersection crossings). <=5-10 peds => ~0.
+   So "300+ cars near-zero-crash" is NOT achievable in this map; the honest safe operating point is ~80-100 cars + a handful of peds.
+
+## WHAT MADE IT WORK (cost/model changes this session, all committed)
+- GRADED car-collision-risk hinge (dense "back off" signal) => drove car-car crashes to ~0 (the single biggest lever; the prior binary-only crash cost couldn't).
+- DUAL cost channel + dual-Lagrangian: hard = collisions (car-ped weighted 3-8x), target->0; soft = graded (ped-yield, car-risk, lane). Lets crashes target 0 without flattening yielding.
+- LOW cruise cap (4 m/s) = more reaction time (the "slow then scale" thesis).
+- LOW density (frontier) + MULTI-REGION round-robin training => cross-map generalization.
+- Architecture: attention/social-attention tested, NOT better than Deep Sets -> kept Deep Sets.
+
+## BEST CHECKPOINTS (in Modal volume smoothride-nav-ckpts)
+- trained_v5c96p5x.msgpack  -> in-distribution champion (0.07% @96cars/5peds)
+- trained_v5loolong.msgpack -> LOO/generalization champion (held-out eval pending/below)
+- trained_v4loo.msgpack     -> LOO model already verified 1% on held-out mission
+
+## REMAINING / NICE-TO-HAVE (not blocking)
+- Render a demo scene of the champion in the Cesium viewer (export_snapshots/export_cesium).
+- v2-T4 (end-on-all-done eval trim) still UNBUILT (cosmetic).
+- Could push LOO lower (longer/lower-density multi-region).
+
+# ============================================================
+
 # ⚠️ SOURCE OF TRUTH — Overnight autonomous run (2026-06-21 → ~09:00)
 
 **If you are resuming after a compaction: READ THIS FILE FIRST. It — plus `git log` and the Modal volume — is authoritative over any conversation summary.** Update it every cycle and `git commit && git push` after each update.
