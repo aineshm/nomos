@@ -1,7 +1,7 @@
 """Spawns must not overlap: no two cars start within a collision of each other,
 and no pedestrian starts on top of a car. (Buildings are not in the env — cars
 spawn on the drivable road network by construction, so they never start inside a
-footprint; see docs/HANDOFF-sim-contract.md §0.)"""
+footprint; see docs/internal/HANDOFF-sim-contract.md §0.)"""
 import jax
 import numpy as np
 

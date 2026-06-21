@@ -130,7 +130,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--ckpt", default=os.path.join(OUT, "trained.msgpack"))
     ap.add_argument("--name", default="trained")
-    ap.add_argument("--title", default="SmoothRide — trained policy")
+    ap.add_argument("--title", default="Nomos — trained policy")
     ap.add_argument("--agents", type=int, default=24)
     ap.add_argument("--peds", type=int, default=12)
     ap.add_argument("--steps", type=int, default=300)

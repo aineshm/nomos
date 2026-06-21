@@ -1,4 +1,4 @@
-# SmoothRide — Cesium 3D viewer
+# Nomos — Cesium 3D viewer
 
 Replays a `public/scene.json` (schema v1) of meshed cars on 3D San Francisco.
 
@@ -24,7 +24,7 @@ python -m smoothride.demo.export_cesium \
 ## The contract
 `scene.json` is schema v1 (`smoothride/demo/scene.py`). Any sim backend that
 emits this format (kinematic now, Isaac/PhysX later) replays in this viewer
-unchanged. See `docs/HANDOFF-sim-contract.md`.
+unchanged. See `docs/internal/HANDOFF-sim-contract.md`.
 
 ## Demo scenes & status
-Pre-rendered demo scenes (downtown training progression + champion held-out Mission) are bundled in `public/` and listed in **`SCENES.md`** — start the server and pick from the dropdown. Project status & results: top-level `README.md` and `docs/HANDOFF-overnight.md`.
+Pre-rendered demo scenes (downtown training progression + champion held-out Mission) are bundled in `public/` and listed in **`SCENES.md`** — start the server and pick from the dropdown. Project status & results: top-level `README.md` and `docs/internal/HANDOFF-overnight.md`.

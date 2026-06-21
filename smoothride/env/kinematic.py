@@ -1,6 +1,6 @@
 """Vectorized kinematic multi-agent driving environment (JAX) — v3 (scales).
 
-The behavioral layer of SmoothRide. Cars follow routes on the real SF graph under
+The behavioral layer of Nomos. Cars follow routes on the real SF graph under
 a kinematic-bicycle model and learn to coordinate, at realistic city density.
 
 Models the actual environment:
@@ -327,7 +327,7 @@ def reset(env: Env, key: jax.Array):
         just_crashed=jnp.zeros(n, bool), crashes=jnp.zeros(n, jnp.int32),
         # initial merge-in immunity so simultaneous spawns aren't born "crashed"
         # (cars spread apart before grace expires). Minimal spawn-clean for the
-        # finite cohort; see docs/HANDOFF-sim-contract.md §0.
+        # finite cohort; see docs/internal/HANDOFF-sim-contract.md §0.
         spawn_grace=jnp.full(n, SPAWN_GRACE, jnp.int32),
         arrived=jnp.zeros(n, bool), goals=jnp.zeros(n, jnp.int32),
         ped_pos=env.ped_paths[:, 0, :],

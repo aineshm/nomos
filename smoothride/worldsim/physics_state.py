@@ -1,4 +1,4 @@
-"""Newtonian physics -> the SAME state SmoothRide uses in 2D.
+"""Newtonian physics -> the SAME state Nomos uses in 2D.
 
 The 2D env (`smoothride.env.kinematic`) integrates a kinematic bicycle to produce
 `State(pos, heading, speed, ...)` and packs rollouts as

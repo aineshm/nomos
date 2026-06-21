@@ -1,4 +1,4 @@
-"""Drive the worldsim cars from setpoints — the handoff between SmoothRide's
+"""Drive the worldsim cars from setpoints — the handoff between Nomos's
 coordination layer and the Newton physics scene.
 
 Our high-level policy (or any planner) emits, per car, a target waypoint + target

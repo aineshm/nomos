@@ -1,6 +1,6 @@
 # Component specs — schema legend
 
-Each `*.json` in this directory is one component of the SmoothRide stack, captured
+Each `*.json` in this directory is one component of the Nomos stack, captured
 as structured context so the design can be reasoned over as a graph (see
 `../graph.json`). All findings are web-researched and source-cited (June 2026).
 

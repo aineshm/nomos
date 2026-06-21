@@ -1,6 +1,6 @@
 {
   "scene_id": "sf-city-v1",
-  "description": "3D San Francisco (downtown OSM graph) with 250 Ackermann cars. Generated from the SmoothRide road network. Drive via step(action), 4 actuators per car.",
+  "description": "3D San Francisco (downtown OSM graph) with 250 Ackermann cars. Generated from the Nomos road network. Drive via step(action), 4 actuators per car.",
   "source": "generated:smoothride.worldsim.build_sf_scene",
   "format": "mjcf",
   "engine": "newton",

@@ -1,4 +1,4 @@
-> **⚠️ SUPERSEDED (2026-06-21).** This pre-v2 pickup note is out of date. Current status & results: top-level `README.md`; full experiment log: `docs/HANDOFF-overnight.md`; viewer scenes: `smoothride/demo/cesium/SCENES.md`.
+> **⚠️ SUPERSEDED (2026-06-21).** This pre-v2 pickup note is out of date. Current status & results: top-level `README.md`; full experiment log: `docs/internal/HANDOFF-overnight.md`; viewer scenes: `smoothride/demo/cesium/SCENES.md`.
 
 # Next-session pickup — pedestrians that cars slow for (no traffic signals)
 

@@ -26,7 +26,7 @@ Needs a Cesium ion token in the git-ignored `config.js` (copy `config.example.js
 
 Notes:
 - The `iter 0…299` series is the **v1** model (single-cost, dense pedestrians) — kept because it's the clearest "watch it learn" progression for the dropdown.
-- The **champion Mission** scene is the **v2** leave-one-out model — the headline generalization result (see top-level `README.md` and `docs/HANDOFF-overnight.md`).
+- The **champion Mission** scene is the **v2** leave-one-out model — the headline generalization result (see top-level `README.md` and `docs/internal/HANDOFF-overnight.md`).
 - Scene files are large (~3.6 MB each) and `public/` is otherwise git-ignored; these specific demo scenes were force-added. New ad-hoc renders won't be auto-committed.
 
 ## Re-render / add scenes

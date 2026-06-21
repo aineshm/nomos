@@ -1,4 +1,4 @@
-// SmoothRide web viewer — deck.gl + Mapbox.
+// Nomos web viewer — deck.gl + Mapbox.
 // Replays exported trajectories (smoothride.demo.export_web) on the real SF map:
 // the TRAINED coordination policy (full opacity) overlaid on the UNTRAINED
 // "today's traffic" shadow world (faint), with WheeledLab-style RC-car meshes.
@@ -130,7 +130,7 @@ function carLayers() {
       layers.push(new deck.ScenegraphLayer({ ...common, scenegraph: CAR_GLB,
         _animations: { "*": { speed: 1 } }, getTranslation: [0, 0, 0] }));
     } else {
-      layers.push(new deck.SimpleMeshLayer({ ...common, mesh: SmoothRideMesh.car }));
+      layers.push(new deck.SimpleMeshLayer({ ...common, mesh: NomosMesh.car }));
     }
   }
   return layers;

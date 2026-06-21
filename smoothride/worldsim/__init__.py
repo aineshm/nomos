@@ -1,4 +1,4 @@
-"""SmoothRide × Antim/HUD worldsim (Newton physics) — the 3D physics-car path.
+"""Nomos × Antim/HUD worldsim (Newton physics) — the 3D physics-car path.
 
 Replaces the Isaac/WheeledLab demo path with the Antim Labs "Gizmo" worldsim
 template (Newton physics, MJCF scenes). A physics car is just MJCF + the generic

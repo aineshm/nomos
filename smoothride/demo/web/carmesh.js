@@ -75,7 +75,7 @@
     };
   }
 
-  global.SmoothRideMesh = {
+  global.NomosMesh = {
     car: toMesh(makeCarMesh()),
     ped: toMesh(makePedMesh()),
   };

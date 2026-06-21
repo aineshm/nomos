@@ -1,13 +1,13 @@
 """Isaac Lab external task: WheeledLab car (velocity, heading) command tracking.
 
 Importing this module registers the Gym env id so the standard Isaac Lab / RSL-RL
-training scripts can pick it up with `--task SmoothRide-WheeledLab-Track-v0`.
+training scripts can pick it up with `--task Nomos-WheeledLab-Track-v0`.
 Isaac is only available inside the Modal container, so the registration is guarded
 — importing this on a plain laptop is a no-op instead of an ImportError.
 """
 from __future__ import annotations
 
-TASK_ID = "SmoothRide-WheeledLab-Track-v0"
+TASK_ID = "Nomos-WheeledLab-Track-v0"
 
 try:
     import gymnasium as gym

@@ -257,7 +257,7 @@ def build(cars: int, out: str, seed: int, buildings: bool, radius: float | None 
     meta = {
         "scene_id": os.path.basename(out.rstrip("/")),
         "description": f"3D San Francisco (downtown OSM graph) with {len(car_bodies)} "
-                       f"Ackermann cars. Generated from the SmoothRide road network. "
+                       f"Ackermann cars. Generated from the Nomos road network. "
                        f"Drive via step(action), 4 actuators per car.",
         "source": "generated:smoothride.worldsim.build_sf_scene",
         "format": "mjcf", "engine": "newton",

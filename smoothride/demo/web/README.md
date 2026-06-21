@@ -1,4 +1,4 @@
-# SmoothRide web viewer (deck.gl + Mapbox)
+# Nomos web viewer (deck.gl + Mapbox)
 
 The pitch, on the real San Francisco map: the **trained** coordination policy
 (full-opacity WheeledLab cars, flowing smoothly, near-zero crashes) overlaid on

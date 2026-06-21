@@ -1,4 +1,4 @@
-# SmoothRide — stack, build order & the honesty check
+# Nomos — stack, build order & the honesty check
 
 Companion to `unstructured.md` (annotated idea), `components/*.json` (structured
 specs), and `graph.json` (dataflow graph). All findings web-researched & cited

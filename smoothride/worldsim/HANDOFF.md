@@ -115,7 +115,7 @@ for t in range(T):
     frame = render(camera="oblique", w=1280, h=720)   # → stitch to video
 ```
 
-### Step 3 — feed it from SmoothRide's brain
+### Step 3 — feed it from Nomos's brain
 `targets` / `target_speeds` come from either:
 - **the trained coordination policy** — its (waypoint/velocity/heading) setpoints
   map straight onto `CarController` (that's why the interface was chosen), or

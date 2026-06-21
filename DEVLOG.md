@@ -1,4 +1,4 @@
-# SmoothRide — Development Log
+# Nomos — Development Log
 
 Running record of the build. Each entry is ~two sentences capturing a **learning**,
 an **architectural change**, or an **improvement**, in the order it happened, so the
