@@ -18,8 +18,12 @@ Run a scaled training (heavy density example):
 Pull the trained policy back for rendering:
   modal volume get smoothride-nav-ckpts trained.msgpack runs/trained.msgpack
   modal volume get smoothride-nav-ckpts untrained.msgpack runs/untrained.msgpack
-  python -m smoothride.demo.export_cesium --elevation synthetic --agents 96 \
+  python -m smoothride.demo.export_cesium --elevation synthetic --agents 96 \\
       --out smoothride/demo/cesium/public/scene.json
+
+Pull versioned snapshot checkpoints for scene-series export:
+  modal volume get smoothride-nav-ckpts 'trained_it*.msgpack' runs/
+  python scripts/export_snapshots.py --tag "" --elevation synthetic
 
 The training loop here mirrors smoothride/rl/train_local.py::main, but writes to
 the persistent volume and reports per-iter metrics in the Modal logs.
@@ -51,15 +55,57 @@ image = (
 )
 
 
+def should_snapshot(it: int, snapshot_every: int, iters: int) -> bool:
+    """Return True when iteration *it* should emit a versioned snapshot.
+
+    Rules (evaluated in priority order):
+      1. ``it == iters - 1`` (final iter) → always True, regardless of
+         ``snapshot_every``.  The final policy is always captured.
+      2. ``snapshot_every <= 0`` → mid-run snapshots disabled; only the final
+         iter (rule 1) triggers.
+      3. ``it == 0`` → the baseline (pre-training) policy; True when
+         ``snapshot_every > 0``.
+      4. ``it % snapshot_every == 0`` → periodic mid-run snapshot.
+
+    ``snapshot_every > 0`` enables full versioning (iter 0 baseline +
+    every N iters + final).  ``snapshot_every <= 0`` writes only the final
+    iter, which costs one extra ``volume.commit()`` but keeps the volume tidy
+    for quick experiments.
+    """
+    if it == iters - 1:
+        return True
+    if snapshot_every <= 0:
+        return False
+    return it == 0 or it % snapshot_every == 0
+
+
+def snapshot_name(tag: str, it: int) -> str:
+    """Return the versioned checkpoint filename for iteration *it*.
+
+    Example: snapshot_name("_pedtest", 50) -> "trained_pedtest_it00050.msgpack"
+    The five-digit zero-padded iter supports up to 99999 iters before overflow;
+    beyond that the field expands naturally (no truncation).
+    """
+    return f"trained{tag}_it{it:05d}.msgpack"
+
+
 @app.function(image=image, gpu=GPU, timeout=TIMEOUT_S, volumes={CKPT_DIR: volume})
 def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
           steps: int = 300, vmax: float = 16.0, routes: int = 1024,
           lagrangian: bool = True, crash_target: float = 0.3, seed: int = 0,
           verifier: bool = True, cost_target: float = 0.05, region: str = "downtown",
           tag: str = "", n_peds: int = 300, cruise_cap: float = 7.0,
-          ped_radius: float = 3.5, cand_cap: int = 16) -> dict:
+          ped_radius: float = 3.5, cand_cap: int = 16,
+          snapshot_every: int = 50) -> dict:
     """Train the shared-weight nav policy; write {untrained,trained}{tag}.msgpack
-    to the volume. Returns the final-iteration metrics dict."""
+    to the volume. Returns the final-iteration metrics dict.
+
+    Additionally writes versioned snapshots ``trained{tag}_it{N:05d}.msgpack``
+    at iter 0 (baseline), every ``snapshot_every`` iters, and the final iter.
+    Set ``snapshot_every=0`` to disable mid-run snapshots (only final written).
+    All existing periodic saves (every-10-iter ``trained{tag}.msgpack``) are
+    preserved — versioned snapshots are purely additive.
+    """
     import json
     import os
     import time
@@ -132,6 +178,13 @@ def train(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
                 json.dump(history, f)
             volume.commit()
 
+        # Versioned snapshot — additive on top of the existing periodic saves above.
+        if should_snapshot(it, snapshot_every, iters):
+            name = snapshot_name(tag, it)
+            save(ts, name)
+            volume.commit()
+            print(f"  snapshot -> {name}", flush=True)
+
     save(ts, f"trained{tag}.msgpack")
     with open(os.path.join(CKPT_DIR, f"history{tag}.json"), "w") as f:
         json.dump(history, f)
@@ -146,11 +199,13 @@ def main(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
          steps: int = 300, lagrangian: bool = True, verifier: bool = True,
          cost_target: float = 0.05, region: str = "downtown", tag: str = "",
          wait: bool = False, n_peds: int = 300, cruise_cap: float = 7.0,
-         ped_radius: float = 3.5, cand_cap: int = 16, seed: int = 0):
+         ped_radius: float = 3.5, cand_cap: int = 16, seed: int = 0,
+         snapshot_every: int = 50):
     kw = dict(iters=iters, worlds=worlds, agents=agents, peds=peds, steps=steps,
               lagrangian=lagrangian, verifier=verifier, cost_target=cost_target,
               region=region, tag=tag, n_peds=n_peds, cruise_cap=cruise_cap,
-              ped_radius=ped_radius, cand_cap=cand_cap, seed=seed)
+              ped_radius=ped_radius, cand_cap=cand_cap, seed=seed,
+              snapshot_every=snapshot_every)
     if wait:                       # blocking: streams live, dies if the client drops
         print("final metrics:", train.remote(**kw))
         return
@@ -161,4 +216,5 @@ def main(iters: int = 300, worlds: int = 64, agents: int = 64, peds: int = 24,
     fc = train.spawn(**kw)
     print(f"spawned training (call {fc.object_id}); region={region} tag={tag}\n"
           f"  checkpoints -> volume '{APP_NAME}-ckpts' (untrained{tag}.msgpack / trained{tag}.msgpack)\n"
+          f"  versioned snapshots every {snapshot_every} iters -> trained{tag}_it####.msgpack\n"
           f"  pull when done:  modal volume get {APP_NAME}-ckpts trained{tag}.msgpack runs/trained{tag}.msgpack")
