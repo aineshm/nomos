@@ -73,7 +73,10 @@ def collect(env: K.Env, ts: TrainState, key, n_worlds: int):
                        pos=st.pos, heading=st.heading, speed=st.speed,
                        route_idx=st.route_idx, wp_ptr=st.wp_ptr,
                        spawn_grace=st.spawn_grace,
-                       crashed=info["just_crashed"])
+                       crashed=info["just_crashed"],
+                       # pedestrian state — per-world (M,2)/(M,), NOT per-agent:
+                       # after vmap+scan these become (B,T,M,2)/(B,T,M).
+                       ped_pos=st.ped_pos, ped_crossing=st.ped_crossing)
             return (nst, nobs), out
 
         ks_steps = jax.random.split(ks, env.max_steps)
@@ -116,11 +119,17 @@ def verifier_cost(env: K.Env, batch) -> jnp.ndarray:
     def r2(x):                                   # (B,T,...) -> (B*T,...)
         return x.reshape((B * T,) + x.shape[2:])
 
+    # Ped arrays are per-world (shared across agents): reshape (B,T,M,...) -> (B*T,M,...).
+    pp = r2(np.asarray(batch["ped_pos"]))      # (B*T, M, 2)
+    pc = r2(np.asarray(batch["ped_crossing"])) # (B*T, M)
     cost = step_cost(
         r2(np.asarray(batch["pos"])), r2(seg_start), r2(seg_end), r2(lane_count),
         float(env.lane_width), r2(np.asarray(batch["heading"])),
         r2(np.asarray(batch["speed"])), r2(np.asarray(batch["spawn_grace"])),
-        r2(np.asarray(batch["crashed"])), r2(speed_limit))
+        r2(np.asarray(batch["crashed"])), r2(speed_limit),
+        ped_pos=pp, ped_crossing=pc,
+        r_ped=float(env.ped_radius), r_yield=float(env.r_yield),
+        cruise_cap=float(env.cruise_cap))
     return jnp.asarray(cost.reshape(B, T, N))
 
 

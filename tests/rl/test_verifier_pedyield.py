@@ -141,3 +141,38 @@ def test_step_cost_raises_when_ped_pos_without_ped_crossing() -> None:
             heading, speed, spawn_grace, crashed,
             ped_pos=ped_pos, ped_crossing=None,
         )
+
+
+# ---------------------------------------------------------------------------
+# Task 5: Integration test — collect logs peds and verifier_cost uses them
+# ---------------------------------------------------------------------------
+
+import jax  # noqa: E402  (import after test helpers to keep ordering explicit)
+
+from smoothride.rl import ppo  # noqa: E402
+from tests.env.test_kinematic_peds import _env  # noqa: E402
+
+
+def test_collect_logs_peds_and_verifier_cost_runs() -> None:
+    """collect() must log ped_pos (B,T,M,2) and ped_crossing (B,T,M) in the batch;
+    verifier_cost() must accept those keys and return a non-negative (B,T,N) cost."""
+    env = _env(cruise_cap=4.0)
+    ts = ppo.make_train_state(env, ppo.PPOConfig(n_worlds=2), jax.random.PRNGKey(0))
+    batch = ppo.collect(env, ts, jax.random.PRNGKey(1), 2)
+
+    assert batch["ped_pos"].shape == (2, env.max_steps, env.n_peds, 2), (
+        f"Expected ped_pos shape (2, {env.max_steps}, {env.n_peds}, 2), "
+        f"got {batch['ped_pos'].shape}"
+    )
+    assert batch["ped_crossing"].shape == (2, env.max_steps, env.n_peds), (
+        f"Expected ped_crossing shape (2, {env.max_steps}, {env.n_peds}), "
+        f"got {batch['ped_crossing'].shape}"
+    )
+
+    import jax.numpy as jnp  # noqa: PLC0415
+
+    cost = ppo.verifier_cost(env, batch)
+    assert cost.shape == (2, env.max_steps, env.n_agents), (
+        f"Expected cost shape (2, {env.max_steps}, {env.n_agents}), got {cost.shape}"
+    )
+    assert float(jnp.asarray(cost).max()) >= 0.0, "cost must be non-negative"
