@@ -58,6 +58,14 @@
   vs v1 downtown->mission = 12% crashes. => ~12x cross-map SAFETY improvement. 1/96 ~= 3/300 ~ target band.
   THESIS RESULT: graded car-risk + dual-channel(crash_target0) + slow cruise + low ped density + MULTI-REGION training => ~1% crash on an UNSEEN SF neighborhood.
 
+## ROUND 5 (relaunched) push-to-target + longer LOO:
+  _v5c96p3 ap-TExTV1SauCR1WZTISuKPUs
+  _v5c96p5x ap-Uk9Z3AsKHFeLghPFkO9M3Q
+  _v5loolong ap-9htCDmkZlsljZFZNjIjfj5
+  _v5c96p3(96/3,300it) _v5c96p5x(96/5,400it) _v5loolong(96/8,3region,600it~long, may not finish by 9am-use latest snapshot).
+  pull: for tg in _v5c96p3 _v5c96p5x _v5loolong; do modal volume get smoothride-nav-ckpts history$tg.json /tmp/h$tg.json --force; python3 -c "import json,sys;m=json.load(open('/tmp/h'+sys.argv[1]+'.json'))[-1];print(sys.argv[1],m['iter'],round(m['crashes_per_car'],4))" $tg; done
+  eval LOO held-out: modal volume get smoothride-nav-ckpts trained_v5loolong.msgpack runs/; cp runs/trained_v5loolong.msgpack runs/untrained_v5loolong.msgpack; python3 scripts/eval_policy.py --region mission --agents 96 --peds 10 --steps 250 --trained runs/trained_v5loolong.msgpack --untrained runs/untrained_v5loolong.msgpack
+
 ## Experiment results (append every run)
 | tag | region(s) train | eval region | arch | cars | peds | iters | crash/car | car-ped | car-car | arrived% | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
