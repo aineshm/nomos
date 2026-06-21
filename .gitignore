@@ -31,3 +31,4 @@ main-cesium-*.png
 # test/coverage caches
 .coverage
 .pytest_cache/
+runs_demo/

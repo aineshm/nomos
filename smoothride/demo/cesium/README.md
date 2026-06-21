@@ -25,3 +25,6 @@ python -m smoothride.demo.export_cesium \
 `scene.json` is schema v1 (`smoothride/demo/scene.py`). Any sim backend that
 emits this format (kinematic now, Isaac/PhysX later) replays in this viewer
 unchanged. See `docs/HANDOFF-sim-contract.md`.
+
+## Demo scenes & status
+Pre-rendered demo scenes (downtown training progression + champion held-out Mission) are bundled in `public/` and listed in **`SCENES.md`** — start the server and pick from the dropdown. Project status & results: top-level `README.md` and `docs/HANDOFF-overnight.md`.
