@@ -28,15 +28,19 @@
 - v2-T3 dual-channel PPO + dual-Lagrangian (crash_target→0) — ✅ DONE (536f724, 159 tests)
 - v2-T4 end-on-all-done trim (eval honesty) — ⬜ pending
 - v2-T5 multi-region round-robin (`--regions`) for LOO — ⬜ pending
-- v2-T6 attention/social-attention encoder variant (selectable) — ⬜ pending
+- v2-T6 attention encoder (--arch attention) — ✅ DONE (5adc7bf, 166 tests)
 
 ## Experiment results (append every run)
 | tag | region(s) train | eval region | arch | cars | peds | iters | crash/car | car-ped | car-car | arrived% | notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | _peds (v1) | downtown | downtown | deepsets | 96 | 300 | 300 | 0.068 | – | – | 74 | pre-v2, single cost |
 | _peds (v1) | downtown | mission | deepsets | 96 | 300 | 300 | 0.12 | – | – | 67 | held-out, cache-fixed |
+| _v2val | downtown | – | deepsets | 96 | 300 | 150 | ~0.46@it60 | car-ped HIGH | ~0.000 | – | **FINDING: car-risk hinge KILLED car-car; intersection crossings spiked car-PED. crash worse than v1.** |
+| _v2slow | downtown | – | deepsets | 96 | 300 | 200 | (running) | – | – | – | corrective: cruise_cap 4, w_carped 8 — slow+yield hard for intersection peds |
 
 ## RESUME HERE
 - **Next action:** VALIDATION run `_v2val` launched (dual-channel, downtown, 96 cars/300 peds, 150 iters, crash-target 0.0). Watching lam_hard for saturation. If crashes drop & stable → build T5(multi-region)/T6(attention)/T4 and start LOO+density+arch sweeps. v2 run flags: --crash-target/--soft-target/--w-carped.
 - **Running Modal jobs:** none yet.
-- **Best config so far:** v1 `trained_peds` (downtown). Target: beat 0.068 crash/car and close the 12% held-out gap.
+- **KEY INSIGHT:** graded car-risk hinge => car-car ~0. Remaining crashes are car-PED, worsened by intersection crossings (peds at conflict points). Lever = lower cruise_cap + higher w_carped + earlier yield. May also need a density/speed frontier (fewer peds or slower).
+- **Running:** _v2val (deepsets baseline, finishing), _v2slow (cruise_cap4/w_carped8 corrective). Next: attention arch + density/speed sweep + LOO once a config gets car-ped low.
+- **Best config so far:** v1 `trained_peds` (0.068, but that was mid-block peds). v2 car-car solved; car-ped is the open problem.
