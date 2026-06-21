@@ -55,6 +55,7 @@ async function main() {
   viewer.timeline.zoomTo(start, stop);
 
   world.cars.forEach((car) => addCar(viewer, car, start, meta));
+  (world.peds || []).forEach((ped) => addPed(viewer, ped, start, meta));
 
   // HUD — trips and crashed both update LIVE at the current frame (start at 0),
   // not the end-of-run totals (which made "crashed" read non-zero before playback).
@@ -92,6 +93,23 @@ function sampledPosition(car, start, meta) {
     p.addSample(when, Cesium.Cartesian3.fromDegrees(car.lng[t], car.lat[t], (car.z[t] || 0) + CAR_H / 2));
   }
   return p;
+}
+
+// Pedestrians: small upright markers (amber), ~1.7 m tall, walking on the terrain.
+const PED_H = 1.7;
+function addPed(viewer, ped, start, meta) {
+  const pos = new Cesium.SampledPositionProperty();
+  for (let t = 0; t < ped.lng.length; t++) {
+    const when = Cesium.JulianDate.addSeconds(start, t * meta.dt, new Cesium.JulianDate());
+    pos.addSample(when, Cesium.Cartesian3.fromDegrees(ped.lng[t], ped.lat[t], (ped.z[t] || 0) + PED_H / 2));
+  }
+  viewer.entities.add({
+    position: pos,
+    cylinder: {
+      length: PED_H, topRadius: 0.3, bottomRadius: 0.35,
+      material: Cesium.Color.fromCssColorString("#f59e0b"),  // amber, distinct from cars
+    },
+  });
 }
 
 // Per-car colour by state: red = crashed, green = arrived (trip complete),
