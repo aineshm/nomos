@@ -40,6 +40,7 @@ def rollout(env: K.Env, params, key, sample=True, safe=False, filt="vo"):
     safe=True wraps each action with a runtime safety filter: filt='vo' (velocity
     obstacle / ORCA) or filt='cbf' (higher-order CBF-QP)."""
     from ..rl.networks import ActorCritic
+    from ..rl.ppo import _global_feat
     from ..rl.safety import safe_action
     from ..rl.cbf import cbf_action
     filter_fn = cbf_action if filt == "cbf" else safe_action
@@ -47,7 +48,7 @@ def rollout(env: K.Env, params, key, sample=True, safe=False, filt="vo"):
 
     def step_fn(carry, k):
         st, obs = carry
-        gf = jnp.broadcast_to(obs.mean(-2, keepdims=True), obs.shape)
+        gf = _global_feat(obs)
         mean, log_std, _ = net.apply(params, obs, gf)
         ka, kn = jax.random.split(k)
         action = mean + (jnp.exp(log_std) * jax.random.normal(ka, mean.shape)

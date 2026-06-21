@@ -40,9 +40,11 @@ def policy_trace(env: K.Env, params, key, n_steps: int, sample: bool = False) ->
     rspeed = np.asarray(env.routes_speed)
     step = jax.jit(lambda s, a, k: K.step(env, s, a, k))
 
+    from smoothride.rl.ppo import _global_feat
+
     @jax.jit
     def act(obs):
-        gf = jnp.broadcast_to(obs.mean(-2, keepdims=True), obs.shape)
+        gf = _global_feat(obs)
         mean, log_std, _ = net.apply(params, obs, gf)
         return mean, log_std
 

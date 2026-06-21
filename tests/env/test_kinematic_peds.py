@@ -62,3 +62,25 @@ def test_ped_collision_uses_raised_radius():
     env = _env(ped_radius=3.5)
     assert env.ped_radius == 3.5
     assert env.collision_radius < env.ped_radius   # asymmetric: wider berth for people
+
+
+def test_observation_is_structured_with_masks():
+    env = _env()
+    st, obs = K.reset(env, jax.random.PRNGKey(0))
+    assert set(obs) == {"ego", "cars", "cars_mask", "peds", "peds_mask"}
+    N = env.n_agents
+    assert obs["ego"].shape == (N, 7)
+    assert obs["cars"].shape == (N, env.cand_cap_car, 4)
+    assert obs["cars_mask"].shape == (N, env.cand_cap_car)
+    assert obs["peds"].shape == (N, env.cand_cap_ped, 5)
+    assert obs["peds_mask"].shape == (N, env.cand_cap_ped)
+    # masks are boolean and self is never a neighbor of itself
+    assert obs["cars_mask"].dtype == jnp.bool_
+
+
+def test_ped_crossing_bit_present_in_obs():
+    env = _env()
+    st, obs = K.reset(env, jax.random.PRNGKey(0))
+    # 5th ped-feature is the crossing bit in {0,1}
+    bit = np.asarray(obs["peds"][..., 4])
+    assert set(np.unique(bit[np.asarray(obs["peds_mask"])])) <= {0.0, 1.0}

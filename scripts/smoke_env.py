@@ -14,7 +14,8 @@ print(f"obs_dim={env.obs_dim} act_dim={env.act_dim} "
 
 key = jax.random.PRNGKey(0)
 st, obs = K.reset(env, key)
-assert obs.shape == (env.n_agents, env.obs_dim), obs.shape
+assert set(obs) == {"ego", "cars", "cars_mask", "peds", "peds_mask"}, obs.keys()
+assert obs["ego"].shape == (env.n_agents, env.obs_dim), obs["ego"].shape
 
 step = jax.jit(lambda s, a, k: K.step(env, s, a, k))
 for i in range(env.max_steps):
@@ -28,11 +29,11 @@ B = 32
 vreset = jax.jit(jax.vmap(lambda k: K.reset(env, k)))
 vstep = jax.jit(jax.vmap(lambda s, a, k: K.step(env, s, a, k)))
 bst, bobs = vreset(jax.random.split(jax.random.PRNGKey(1), B))
-assert bobs.shape == (B, env.n_agents, env.obs_dim), bobs.shape
+assert bobs["ego"].shape == (B, env.n_agents, env.obs_dim), bobs["ego"].shape
 acts = jax.vmap(lambda k: jax.random.uniform(
     k, (env.n_agents, env.act_dim), minval=-1, maxval=1))(
     jax.random.split(jax.random.PRNGKey(2), B))
 bst, bobs, br, bdone, binfo = vstep(
     bst, acts, jax.random.split(jax.random.PRNGKey(3), B))
-print(f"[vmap x{B}] obs={tuple(bobs.shape)} reward={tuple(br.shape)}")
+print(f"[vmap x{B}] obs(ego)={tuple(bobs['ego'].shape)} reward={tuple(br.shape)}")
 print("OK")

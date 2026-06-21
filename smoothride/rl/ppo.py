@@ -33,13 +33,18 @@ class PPOConfig:
 
 
 def _global_feat(obs):
-    """Pooled scene summary per world, broadcast to each agent. obs: (..., N, O)."""
-    return jnp.broadcast_to(obs.mean(-2, keepdims=True), obs.shape)
+    """Pooled scene summary per world, broadcast to each agent.
+
+    obs is now the structured dict; pool the per-agent ego vectors over the agent
+    axis and broadcast back, giving each agent a shared (..., N, EGO) scene summary.
+    """
+    return jnp.broadcast_to(obs["ego"].mean(-2, keepdims=True), obs["ego"].shape)
 
 
 def make_train_state(env: K.Env, cfg: PPOConfig, key) -> TrainState:
     net = ActorCritic(act_dim=env.act_dim)
-    dummy = jnp.zeros((env.n_agents, env.obs_dim))
+    # build a dummy STRUCTURED obs from reset (guarantees correct dict shapes).
+    _, dummy = K.reset(env, key)
     params = net.init(key, dummy, _global_feat(dummy))
     tx = optax.chain(optax.clip_by_global_norm(cfg.max_grad_norm),
                      optax.adam(cfg.lr))
@@ -167,7 +172,11 @@ def update(env: K.Env, cfg: PPOConfig, ts: TrainState, batch, lam=0.0):
 
     def flat(x):
         return x.reshape((-1,) + x.shape[3:])
-    obs = flat(batch["obs"])
+
+    def _flat_obs(obs):     # dict of (B,T,N,...) -> dict of (B*T*N, ...)
+        return {k: v.reshape((-1,) + v.shape[3:]) for k, v in obs.items()}
+
+    obs = _flat_obs(batch["obs"])
     gf = flat(batch["gf"])
     action = flat(batch["action"])
     old_logp = flat(batch["logp"])
@@ -175,7 +184,7 @@ def update(env: K.Env, cfg: PPOConfig, ts: TrainState, batch, lam=0.0):
     returns = flat(ret)
     advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
-    n = obs.shape[0]
+    n = obs["ego"].shape[0]
     mb = n // cfg.minibatches
 
     def ppo_loss(params, ob, g, ac, olp, advv, rets):
@@ -197,8 +206,8 @@ def update(env: K.Env, cfg: PPOConfig, ts: TrainState, batch, lam=0.0):
             idx = jax.lax.dynamic_slice_in_dim(perm, i * mb, mb)
             grad_fn = jax.value_and_grad(ppo_loss, has_aux=True)
             (loss, aux), grads = grad_fn(
-                ts.params, obs[idx], gf[idx], action[idx],
-                old_logp[idx], advantage[idx], returns[idx])
+                ts.params, {k: v[idx] for k, v in obs.items()}, gf[idx],
+                action[idx], old_logp[idx], advantage[idx], returns[idx])
             ts = ts.apply_gradients(grads=grads)
             return ts, loss
         ts, losses = jax.lax.scan(mb_step, ts, jnp.arange(cfg.minibatches))

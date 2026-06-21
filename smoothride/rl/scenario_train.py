@@ -84,7 +84,7 @@ def collect_scenarios(env_b, ts, key, shield=True):
     def one(env, wkey):
         def step_fn(carry, k):
             st, obs = carry
-            gf = jnp.broadcast_to(obs.mean(-2, keepdims=True), obs.shape)
+            gf = ppo._global_feat(obs)
             mean, log_std, value = ts.apply_fn(ts.params, obs, gf)
             ka, kn = jax.random.split(k)
             action = mean + jnp.exp(log_std) * jax.random.normal(ka, mean.shape)
@@ -98,8 +98,7 @@ def collect_scenarios(env_b, ts, key, shield=True):
         st, obs = K.reset(env, kr)
         (lst, lobs), traj = jax.lax.scan(step_fn, (st, obs),
                                          jax.random.split(ks, env.max_steps))
-        _, _, lv = ts.apply_fn(ts.params, lobs,
-                               jnp.broadcast_to(lobs.mean(-2, keepdims=True), lobs.shape))
+        _, _, lv = ts.apply_fn(ts.params, lobs, ppo._global_feat(lobs))
         traj["last_value"] = lv
         traj["final_crashes"] = lst.crashes
         traj["final_goals"] = lst.goals

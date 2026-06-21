@@ -13,20 +13,29 @@ import jax.numpy as jnp
 class ActorCritic(nn.Module):
     act_dim: int
     hidden: int = 128
+    set_hidden: int = 64
 
     @nn.compact
     def __call__(self, obs, global_feat):
-        # --- actor: decentralized, local obs only ---
-        x = obs
-        x = nn.tanh(nn.Dense(self.hidden)(x))
+        # --- structured obs -> per-agent local feature vector ---
+        # encode the masked car/ped sets with permutation-invariant DeepSets, then
+        # concat with the ego vector to form the local feature the actor sees.
+        car_enc = DeepSets(feat_dim=4, hidden=self.set_hidden)(
+            obs["cars"], obs["cars_mask"])               # (..., 2*set_hidden)
+        ped_enc = DeepSets(feat_dim=5, hidden=self.set_hidden)(
+            obs["peds"], obs["peds_mask"])               # (..., 2*set_hidden)
+        feat = jnp.concatenate([obs["ego"], car_enc, ped_enc], axis=-1)
+
+        # --- actor: decentralized, local feature only ---
+        x = nn.tanh(nn.Dense(self.hidden)(feat))
         x = nn.tanh(nn.Dense(self.hidden)(x))
         mean = nn.Dense(self.act_dim,
                         kernel_init=nn.initializers.orthogonal(0.01))(x)
         log_std = self.param("log_std",
                              nn.initializers.constant(-0.5), (self.act_dim,))
 
-        # --- critic: centralized, local obs + pooled scene summary ---
-        c = jnp.concatenate([obs, global_feat], axis=-1)
+        # --- critic: centralized, local feature + pooled scene summary ---
+        c = jnp.concatenate([feat, global_feat], axis=-1)
         c = nn.tanh(nn.Dense(self.hidden)(c))
         c = nn.tanh(nn.Dense(self.hidden)(c))
         value = nn.Dense(1)(c)[..., 0]

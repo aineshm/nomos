@@ -27,6 +27,11 @@ from . import spatial
 from .ped_paths import arc_interp
 from .routing import RoutePool
 
+# Structured-observation feature dims (module-level, NOT pytree fields).
+EGO_FEAT = 7   # speed, sin/cos(herr), dist, progress, lead_gap, lane_frac
+CAR_FEAT = 4   # ego-frame rel x, rel y, rel vx, rel vy
+PED_FEAT = 5   # ego-frame rel x, rel y, rel vx, rel vy, crossing-bit
+
 
 @struct.dataclass
 class Env:
@@ -43,6 +48,8 @@ class Env:
     n_agents: int = struct.field(pytree_node=False, default=24)
     n_peds: int = struct.field(pytree_node=False, default=12)
     k_neighbors: int = struct.field(pytree_node=False, default=4)
+    cand_cap_car: int = struct.field(pytree_node=False, default=16)
+    cand_cap_ped: int = struct.field(pytree_node=False, default=16)
     max_steps: int = struct.field(pytree_node=False, default=300)
     cell_size: float = struct.field(pytree_node=False, default=35.0)
     cap: int = struct.field(pytree_node=False, default=16)
@@ -90,8 +97,8 @@ class Env:
     w_time: float = struct.field(pytree_node=False, default=0.02)
 
     @property
-    def obs_dim(self) -> int:
-        return 6 + 1 + self.k_neighbors * 4 + 3
+    def obs_dim(self) -> int:               # retained for back-compat callers
+        return EGO_FEAT
 
     @property
     def act_dim(self) -> int:
@@ -168,7 +175,16 @@ def _candidates(env: Env, pos):
                                    env.ncx, env.ncy, env.cap, env.cand_C)
 
 
-def _observe(env: Env, st: State, cand) -> jnp.ndarray:
+def _observe(env: Env, st: State, cand) -> dict:
+    """Structured per-agent observation (all entity features are ego-relative).
+
+    Returns a dict of:
+      ego        (N, EGO_FEAT)
+      cars       (N, cand_cap_car, CAR_FEAT)   ego-frame rel pos/vel of nearest cars
+      cars_mask  (N, cand_cap_car) bool        True for real (valid) neighbor slots
+      peds       (N, cand_cap_ped, PED_FEAT)   ego-frame rel pos/vel + crossing-bit
+      peds_mask  (N, cand_cap_ped) bool        True for in-range pedestrian slots
+    """
     N = env.n_agents
     vmax = jnp.minimum(env.v_max, env.routes_speed[st.route_idx, st.wp_ptr])
     tgt = _target_wp(env, st)
@@ -178,11 +194,11 @@ def _observe(env: Env, st: State, cand) -> jnp.ndarray:
     n = env.routes_n[st.route_idx]
     progress = st.wp_ptr / jnp.maximum(n - 1, 1)
     fdir = jnp.stack([jnp.cos(st.heading), jnp.sin(st.heading)], -1)
+    c, s = jnp.cos(-st.heading), jnp.sin(-st.heading)
 
-    # candidate relative geometry (N, C, 2)
+    # ----- lead gap (kept for the ego block) -----
     valid = (cand >= 0) & (cand != jnp.arange(N)[:, None])
     rel = st.pos[cand] - st.pos[:, None, :]
-    cd = jnp.where(valid, jnp.linalg.norm(rel, axis=-1), 1e9)
     forward = jnp.sum(rel * fdir[:, None, :], -1)
     lateral = jnp.abs(rel[..., 0] * fdir[:, None, 1] - rel[..., 1] * fdir[:, None, 0])
     ahead = valid & (forward > 0.5) & (lateral < env.lane_width) & (forward < env.lead_cone)
@@ -191,40 +207,65 @@ def _observe(env: Env, st: State, cand) -> jnp.ndarray:
     lane_frac = st.lane.astype(jnp.float32) / jnp.maximum(
         env.routes_lanes[st.route_idx, st.wp_ptr] - 1, 1)
     ego = jnp.stack([
-        st.speed / jnp.maximum(vmax, 1.0),
-        jnp.sin(herr), jnp.cos(herr),
+        st.speed / jnp.maximum(vmax, 1.0), jnp.sin(herr), jnp.cos(herr),
         jnp.clip(dist / 100.0, 0, 1), progress,
         jnp.clip(lead_gap / env.lead_cone, 0, 1),
     ], axis=-1)
+    ego = jnp.concatenate([ego, lane_frac[:, None]], -1)              # (N, 7)
 
-    # K nearest among candidates (ego frame)
-    _, kk = jax.lax.top_k(-cd, env.k_neighbors)             # (N,K) into candidate axis
-    nbr = jnp.take_along_axis(cand, kk, axis=1)             # (N,K) agent idx
+    # ----- car set: nearest cand_cap_car candidates, ego-frame, masked -----
+    cd = jnp.where(valid, jnp.linalg.norm(rel, axis=-1), 1e9)
+    cc = min(env.cand_cap_car, cand.shape[1])
+    _, kk = jax.lax.top_k(-cd, cc)                                     # (N, cc)
+    nbr = jnp.take_along_axis(cand, kk, axis=1)
     nbr_valid = jnp.take_along_axis(valid, kk, axis=1)
-    c, s = jnp.cos(-st.heading), jnp.sin(-st.heading)
     nrel = st.pos[nbr] - st.pos[:, None, :]
-    nx = (nrel[..., 0] * c[:, None] - nrel[..., 1] * s[:, None]) * nbr_valid
-    ny = (nrel[..., 0] * s[:, None] + nrel[..., 1] * c[:, None]) * nbr_valid
+    nx = (nrel[..., 0] * c[:, None] - nrel[..., 1] * s[:, None])
+    ny = (nrel[..., 0] * s[:, None] + nrel[..., 1] * c[:, None])
     vel = st.speed[:, None] * fdir
-    nvel = (vel[nbr] - vel[:, None, :]) * nbr_valid[..., None]
-    nbr_feat = jnp.concatenate([
-        jnp.clip(nx[..., None] / 50, -1, 1),
-        jnp.clip(ny[..., None] / 50, -1, 1),
-        jnp.clip(nvel / env.v_max, -1, 1),
-    ], -1).reshape(N, -1)
+    nvel = vel[nbr] - vel[:, None, :]
+    nvx = nvel[..., 0] * c[:, None] - nvel[..., 1] * s[:, None]
+    nvy = nvel[..., 0] * s[:, None] + nvel[..., 1] * c[:, None]
+    cars = jnp.stack([nx / 50, ny / 50, nvx / env.v_max, nvy / env.v_max], -1)
+    cars = jnp.clip(cars, -1, 1)
+    cars, nbr_valid = _pad_set(cars, nbr_valid, env.cand_cap_car, CAR_FEAT)
 
-    # nearest pedestrian (peds are few -> brute force)
+    # ----- ped set: nearest cand_cap_ped peds, ego-frame, masked, + crossing bit -----
     pd = st.pos[:, None, :] - st.ped_pos[None, :, :]
-    pdist = jnp.linalg.norm(pd, axis=-1)
-    pj = jnp.argmin(pdist, axis=-1)
-    prel = st.ped_pos[pj] - st.pos
-    px = prel[:, 0] * c - prel[:, 1] * s
-    py = prel[:, 0] * s + prel[:, 1] * c
-    pmin = pdist[jnp.arange(N), pj]
-    ped_feat = jnp.stack([jnp.clip(px / 50, -1, 1), jnp.clip(py / 50, -1, 1),
-                          jnp.clip(pmin / 50, 0, 1)], -1)
+    pdist = jnp.linalg.norm(pd, axis=-1)                              # (N, M)
+    cp = min(env.cand_cap_ped, env.n_peds)
+    _, pk = jax.lax.top_k(-pdist, cp)                                 # (N, cp)
+    prel = st.ped_pos[pk] - st.pos[:, None, :]
+    px = prel[..., 0] * c[:, None] - prel[..., 1] * s[:, None]
+    py = prel[..., 0] * s[:, None] + prel[..., 1] * c[:, None]
+    pvel = st.ped_vel[pk]
+    pvx = pvel[..., 0] * c[:, None] - pvel[..., 1] * s[:, None]
+    pvy = pvel[..., 0] * s[:, None] + pvel[..., 1] * c[:, None]
+    cross = st.ped_crossing[pk].astype(jnp.float32)
+    peds = jnp.stack([jnp.clip(px / 50, -1, 1), jnp.clip(py / 50, -1, 1),
+                      jnp.clip(pvx / env.v_max, -1, 1),
+                      jnp.clip(pvy / env.v_max, -1, 1), cross], -1)
+    in_range = jnp.take_along_axis(pdist, pk, axis=1) < env.r_yield * 3.0
+    peds, peds_mask = _pad_set(peds, in_range, env.cand_cap_ped, PED_FEAT)
 
-    return jnp.concatenate([ego, lane_frac[:, None], nbr_feat, ped_feat], -1)
+    return {"ego": ego, "cars": cars, "cars_mask": nbr_valid,
+            "peds": peds, "peds_mask": peds_mask}
+
+
+def _pad_set(feat: jnp.ndarray, mask: jnp.ndarray, cap: int, fdim: int):
+    """Pad a (N, k, fdim) set + (N, k) mask up to the static `cap` slots.
+
+    k = min(cap, available) at trace time; padding keeps obs shapes static when
+    the number of candidates/peds is smaller than the configured cap. Padded
+    slots are zero features with a False mask (DeepSets ignores them)."""
+    k = feat.shape[1]
+    if k >= cap:
+        return feat, mask
+    n = feat.shape[0]
+    pad_f = jnp.zeros((n, cap - k, fdim), feat.dtype)
+    pad_m = jnp.zeros((n, cap - k), jnp.bool_)
+    return (jnp.concatenate([feat, pad_f], axis=1),
+            jnp.concatenate([mask.astype(jnp.bool_), pad_m], axis=1))
 
 
 def _ped_step(env: Env, st: State):
