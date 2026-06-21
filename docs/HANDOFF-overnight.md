@@ -5,7 +5,7 @@
 ## OUTCOME: both goals met.
 1. MINIMIZE CRASHES (in-distribution): **_v5c96p5x** (96 cars / 5 peds, downtown, 400it) = **0.07% crash/car** (~1 crash per 1,400 cars; car-car AND car-ped ~0). Far below the 0.5% / "1-2 per 300" target.
    - _v5c96p3 (96/3) = 0.52%. _v4c96p5 (200it) = 0.98%. Longer training matters a lot (0.46%@240it -> 0.07%@399it).
-2. GENERALIZATION (leave-one-out): **_v4loo** (trained downtown+nopa+chinatown, NEVER saw mission) -> held-out Mission = **1% crash** (1/96), vs v1 downtown->mission = 12%. **~12x cross-map safety gain.** _v5loolong (96/8, 3-region, 600it) eval on held-out mission: SEE RESULTS TABLE (running/just-finished).
+2. GENERALIZATION (leave-one-out): **_v4loo** (trained downtown+nopa+chinatown, NEVER saw mission) -> held-out Mission = **1% crash** (1/96), vs v1 downtown->mission = 12%. **~12x cross-map safety gain.** _v5loolong (96/8, 3-region, 600it) held-out Mission = **2/96 (2%) crashes**, 71% arrivals, off-lane 7.5%/step (better than v4loo's 11.3%). Both LOO models generalize at ~1-2% crash on unseen region.
 3. DENSITY FRONTIER (the "find the frontier" answer): near-zero crash needs **<=~96 cars AND <=~5 peds** in the downtown bbox. Two independent walls:
    - CAR-CAR wall: 300 cars => ~0.47 crash/car regardless of peds (street graph saturates; cannot be near-zero). 96 cars => car-car ~0.
    - CAR-PED wall: 300 peds => ~0.2-0.5 crash/car (peds at intersection crossings). <=5-10 peds => ~0.
