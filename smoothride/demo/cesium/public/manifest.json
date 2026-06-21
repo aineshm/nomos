@@ -1,0 +1,44 @@
+{
+  "scenes": [
+    {
+      "iter": 0,
+      "file": "scene_it00000.json",
+      "label": "iter 0 (baseline)"
+    },
+    {
+      "iter": 50,
+      "file": "scene_it00050.json",
+      "label": "iter 50"
+    },
+    {
+      "iter": 100,
+      "file": "scene_it00100.json",
+      "label": "iter 100"
+    },
+    {
+      "iter": 150,
+      "file": "scene_it00150.json",
+      "label": "iter 150"
+    },
+    {
+      "iter": 200,
+      "file": "scene_it00200.json",
+      "label": "iter 200"
+    },
+    {
+      "iter": 250,
+      "file": "scene_it00250.json",
+      "label": "iter 250"
+    },
+    {
+      "iter": 299,
+      "file": "scene_it00299.json",
+      "label": "iter 299"
+    },
+    {
+      "iter": 1000,
+      "file": "scene_champion_mission.json",
+      "label": "CHAMPION v4loo \u2014 held-out Mission"
+    }
+  ]
+}
