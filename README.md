@@ -265,3 +265,33 @@ Two data paths feed it:
   viewer shows yielding behavior directly (today it falls back to a synthetic crowd).
 - Push held-out crash below ~1% or support higher density — the lever is
   environment/map scale, not more cost tuning (the frontier is density-bound).
+
+---
+
+## References
+
+The architecture composes a handful of well-established methods. Each row maps a piece
+of Nomos to the paper it's based on.
+
+**Policy network** (`smoothride/rl/networks.py`) — a shared actor + centralized critic
+(CTDE) over permutation-invariant sets of neighbors:
+
+| Piece | Paper |
+|---|---|
+| `DeepSets` neighbor encoder (masked mean+max pool — the production architecture) | Zaheer et al., *Deep Sets*, NeurIPS 2017 — [1703.06114](https://arxiv.org/abs/1703.06114) |
+| `AttentionPool` ego-query set encoder (PMA / social-attention; tested, not better than Deep Sets) | Lee et al., *Set Transformer*, ICML 2019 — [1810.00825](https://arxiv.org/abs/1810.00825); Vaswani et al., *Attention Is All You Need*, 2017 — [1706.03762](https://arxiv.org/abs/1706.03762) |
+| Centralized critic / CTDE (scene summary at train time, local obs at run time) | Lowe et al., *MADDPG*, NeurIPS 2017 — [1706.02275](https://arxiv.org/abs/1706.02275) |
+
+**Trainer** (`smoothride/rl/ppo.py`) — multi-agent PPO with a dual-Lagrangian constraint:
+
+| Piece | Paper |
+|---|---|
+| MAPPO / IPPO (shared-parameter multi-agent PPO) | Yu et al., *The Surprising Effectiveness of PPO in Cooperative MARL*, NeurIPS 2022 — [2103.01955](https://arxiv.org/abs/2103.01955) |
+| Base PPO | Schulman et al., *Proximal Policy Optimization*, 2017 — [1707.06347](https://arxiv.org/abs/1707.06347) |
+| Constrained MDP — crashes as a constraint, adaptive λ via dual ascent | Achiam et al., *Constrained Policy Optimization*, ICML 2017 — [1705.10528](https://arxiv.org/abs/1705.10528); Ray et al., *Benchmarking Safe Exploration* (Safety Gym / PPO-Lagrangian), 2019; Stooke et al., *Responsive Safety via PID-Lagrangian*, ICML 2020 — [2007.03964](https://arxiv.org/abs/2007.03964) |
+| JaxMARL — the JAX multi-agent RL framework Nomos is built on | Rutherford et al., *JaxMARL*, 2023 — [2311.10090](https://arxiv.org/abs/2311.10090) |
+
+The offline adversarial scenario generator (`smoothride/diffusion/`) follows the
+Safe-Sim / MotionDiffuser line of diffusion-based traffic-scenario synthesis; the
+constrained-safety design rationale (CBF-QP / RSS as a runtime backstop vs. learned
+avoidance) is written up in [`RESEARCH_SAFETY.md`](RESEARCH_SAFETY.md).
