@@ -226,19 +226,23 @@ with zero setup. Named regions live in `smoothride/data/map_loader.py::SF_REGION
 `smoothride/demo/cesium/` — a static Cesium site rendering San Francisco in 3D
 (Cesium World Terrain + OSM Buildings), with cars driven along the exported RL
 trajectories and a live telemetry dashboard (trips, crashes/car, fleet status, speed).
-Cars are colored by state (red = crashed, green = arrived, blue = en-route, brighter =
-faster); pedestrians are small 3D figures.
+Cars are colored by state (red = crashed, lingering 3 s before removal; green =
+arrived, ghosting out once the trip is done; blue = en-route, brighter = faster);
+pedestrians are small 3D figures (amber dots from altitude).
 
-Two data paths feed it:
-- **`web/public/trajectories.json`** — the default the live viewer loads (a single
-  trained world). *Caveat:* the current export contains cars only, so the viewer
-  synthesizes an ambient pedestrian crowd; the **real** RL crossing-pedestrians live in
-  the scene exports below.
-- **`public/scene_*.json` + `public/manifest.json`** — self-contained scenes (terrain +
-  roads + buildings + full trajectory, including **real pedestrians**) produced by
-  `scripts/export_snapshots.py`; an iteration dropdown switches between them. The
-  **champion Mission** scene (96 cars / 10 real peds, leave-one-out) is the headline
-  demo. See [`smoothride/demo/cesium/SCENES.md`](smoothride/demo/cesium/SCENES.md).
+Two data paths feed it (both selectable in the viewer's *Policy checkpoint* dropdown):
+- **`public/scene_*.json` + `public/manifest.json`** — self-contained scenes (roads +
+  buildings + full trajectory, including **real crossing pedestrians**) produced by
+  `scripts/export_snapshots.py`. The viewer **defaults to the champion Mission scene**
+  (96 cars / 10 real peds, leave-one-out) — the headline demo — and the dropdown
+  scrubs the downtown training progression (iter 0 → 299). See
+  [`smoothride/demo/cesium/SCENES.md`](smoothride/demo/cesium/SCENES.md).
+- **`web/public/trajectories.json`** — a synthetic lane-following ambient-traffic
+  demo (not an RL rollout), kept as the explicitly-labeled last dropdown entry.
+
+Useful URL params: `?lite=1` (meeting mode: lighter caches + plain buildings),
+`?cars=N` (cap the fleet), `?scene=champion` (initial scene). Full list in
+[`smoothride/demo/cesium/README.md`](smoothride/demo/cesium/README.md).
 
 ---
 
