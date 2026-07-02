@@ -210,7 +210,7 @@
 // ---- animated FloatingPaths background (vanilla port) ----
 function buildPaths(position) {
   let p = "";
-  for (let i = 0; i < 36; i++) {
+  for (let i = 0; i < 22; i++) {
     const d = `M-${380 - i * 5 * position} -${189 + i * 6}C-${380 - i * 5 * position} -${189 + i * 6} -${312 - i * 5 * position} ${216 - i * 6} ${152 - i * 5 * position} ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${684 - i * 5 * position} ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`;
     const w = (0.5 + i * 0.03).toFixed(2);
     const op = (0.10 + i * 0.022).toFixed(3);
@@ -225,7 +225,7 @@ document.getElementById("paths").innerHTML = buildPaths(1) + buildPaths(-1);
 
 // flow keyframes (injected so we can use stroke-dashoffset animation)
 const st = document.createElement("style");
-st.textContent = "@keyframes flow{0%{stroke-dashoffset:1400;opacity:.3}50%{opacity:.7}100%{stroke-dashoffset:0;opacity:.3}}";
+st.textContent = "@keyframes flow{0%{stroke-dashoffset:1400;opacity:0}12%{opacity:.55}88%{opacity:.55}100%{stroke-dashoffset:0;opacity:0}}";
 document.head.appendChild(st);
 
 // ---- staggered title letters ----

@@ -6,8 +6,7 @@ pedestrians, and a live telemetry dashboard.
 
 ## Quick start
 ```bash
-# serve from smoothride/demo so the legacy data path (../web/public/) also resolves
-python3 -m http.server 8141 --directory smoothride/demo
+python3 scripts/serve_demo.py     # no-cache server for smoothride/demo, port 8141
 # open http://127.0.0.1:8141/cesium/index.html
 ```
 A default Cesium ion token is embedded in `app.js`, so 3D terrain + buildings

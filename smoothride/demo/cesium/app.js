@@ -4,8 +4,8 @@
 //
 // Data: public/manifest.json lists pre-rendered RL scenes (training snapshots +
 // the champion held-out-Mission run); a HUD dropdown switches between them. The
-// legacy synthetic lane demo (../web/public/trajectories.json) stays available
-// as an explicitly-labeled dropdown entry.
+// legacy synthetic lane demo (public/trajectories.json) stays available as an
+// explicitly-labeled dropdown entry.
 //
 // Car color = state: blue en-route (brighter = faster), green once arrived
 // (fades to a ghost — no longer an obstacle), red for 3 s after a crash, then
@@ -23,7 +23,7 @@ const TOKEN = Q.get("ionToken")
 
 const SF = { lon: -122.4090, lat: 37.7886 };
 const MANIFEST_URL = "./public/manifest.json";
-const LEGACY_URL = "../web/public/trajectories.json";
+const LEGACY_URL = "./public/trajectories.json";
 const LEGACY_KEY = "__legacy__";
 
 // ?lite=1 — "meeting mode": coarser buildings, smaller caches, no facade skin.

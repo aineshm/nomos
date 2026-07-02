@@ -4,8 +4,7 @@ These `public/*.json` files are **pre-rendered, self-contained scenes** (each em
 
 ## View them
 ```bash
-# serve from smoothride/demo so the legacy data path (../web/public/) also resolves
-python3 -m http.server 8141 --directory smoothride/demo
+python3 scripts/serve_demo.py     # no-cache server for smoothride/demo, port 8141
 # open http://127.0.0.1:8141/cesium/index.html
 #   → use the "Policy checkpoint" dropdown (telemetry panel) to switch scenes
 ```
