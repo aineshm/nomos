@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%2334d399'/></svg>" />
   <title>Nomos — 3D San Francisco</title>
 
   <!-- Official Cesium CDN; CESIUM_BASE_URL must be set before Cesium.js loads. -->
@@ -25,6 +26,11 @@
   <!-- telemetry dashboard (populated by app.js on every clock tick) -->
   <div id="dash">
     <div class="d-h"><span class="d-t">Nomos · telemetry</span><span class="d-live"><i></i>LIVE</span></div>
+
+    <div class="card d-scene">
+      <div class="ct">Policy checkpoint</div>
+      <select id="scene-select"></select>
+    </div>
 
     <div class="d-k">
       <div class="kpi"><span class="l">Trips done</span><b id="m-trips" class="ok">0</b></div>
@@ -52,7 +58,7 @@
       <div class="fb"><span>slowed</span><div class="bar"><i id="fb-jam" style="background:#f59e0b"></i></div><b id="fbn-jam">0</b></div>
       <div class="fb"><span>crashed</span><div class="bar"><i id="fb-crash" style="background:#ef4444"></i></div><b id="fbn-crash">0</b></div>
     </div>
-    <div class="d-foot"><b id="m-cars">0</b> cars · <b id="m-time">0s</b> · traffic signals: <b class="ok">0</b></div>
+    <div class="d-foot"><b id="m-cars">0</b> cars · <b id="m-peds">0</b> peds · <b id="m-time">0s</b> · traffic signals: <b class="ok">0</b></div>
   </div>
 
   <div id="msg"></div>

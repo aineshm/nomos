@@ -39,6 +39,16 @@
       "iter": 1000,
       "file": "scene_champion_mission.json",
       "label": "CHAMPION v4loo \u2014 held-out Mission"
+    },
+    {
+      "iter": 1001,
+      "file": "scene_champion_mission_peds24.json",
+      "label": "CHAMPION v4loo \u2014 Mission, busy sidewalks (24 peds)"
+    },
+    {
+      "iter": 1002,
+      "file": "scene_dense_mission_288.json",
+      "label": "v7 dense \u2014 Mission, 288 peds (3/car stress test)"
     }
   ]
 }
