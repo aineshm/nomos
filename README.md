@@ -18,38 +18,45 @@ solved; the one irreducible human element is **pedestrians**, whom cars must yie
 ## The RL, in brief
 
 **Formulation — decentralized multi-agent control.** Each car is an agent with a *local*
-observation (its own kinematic state, goal, and nearby neighbors/pedestrians). Actions are
-**setpoints** — waypoint / target velocity / heading — not raw torque, so the same policy
-drives the training env and the downstream low-level controller. It's a Dec-POMDP: no agent
-sees global state at run time.
+observation (its own kinematic state, route waypoints, and nearby cars/pedestrians as
+masked sets). Actions are **(accelerate/brake, steer, lane-change)** on a kinematic
+bicycle model, capped by each road's real speed limit. It's a Dec-POMDP: no agent sees
+global state at run time.
 
 **Algorithm — MAPPO/IPPO under CTDE.** *Centralized training, decentralized execution.* A
-centralized critic sees all cars during training; each car acts from local obs at run time.
-The policy is **shared-parameter** across homogeneous agents, so it scales to many cars
-cheaply, and is trained with PPO + GAE across many parallel JAX worlds. CTDE is the standard
-answer to the core multi-agent problem — **non-stationarity**, where the environment shifts
-under each agent as the others learn.
+centralized critic sees a scene summary during training; each car acts from local obs at
+run time. The policy is **shared-parameter** across homogeneous agents, so it scales to
+many cars cheaply, and is trained with PPO + GAE across many parallel JAX worlds. CTDE is
+the standard answer to the core multi-agent problem — **non-stationarity**, where the
+environment shifts under each agent as the others learn.
 
-**Reward — multi-objective with a curriculum.** A weighted sum the policy optimizes:
+**Reward vs. cost — a Constrained MDP, not a weighted sum.** The reward is *efficiency
+only*: `progress + arrival − time`. Nothing about safety lives in it. All safety flows
+through a separate **cost channel** computed by a **deterministic verifier** — a pure
+function over the logged trajectory that scores the rules of the road:
 
-| component | sign | why |
+| channel | terms | constraint target |
 |---|---|---|
-| no-crash | − (dominant) | footprint-overlap / near-miss penalty |
-| keep-moving | + | reward **progress toward goal**, not raw speed |
-| shortest-path | − detour | Dijkstra baseline on the OSM graph |
-| smooth turns | + | gentler driving → smaller sim-to-sim gap |
+| hard | car–car collisions, pedestrian hits (weighted heavier) | **0** |
+| soft | collision-risk hinge, pedestrian-yield hinge, lane-keeping, wrong-way, over-speed | small budget |
 
-Weights are **annealed on a curriculum**: collision avoidance dominates first, efficiency
-rewards fade in once crash-rate drops. Reward shaping guards against the classic hacks —
-idle-forever (idle penalty) and circle-driving to farm speed (progress, not velocity).
+A **dual-Lagrangian PPO** objective (`reward − λ_hard·cost_hard − λ_soft·cost_soft`)
+drives both costs to their targets — the λ multipliers rise automatically via dual
+ascent, so safety is *enforced*, never traded against throughput by hand-tuned weights.
+(An earlier multi-objective reward did exactly that trade — the policy farmed progress
+while crashing — which is why the CMDP reframe exists.)
 
-**Safety — a certifiable backstop.** Learning alone won't guarantee zero crashes, so the
-policy is filtered by a **Higher-Order Control Barrier Function (HOCBF)** QP that both
-*steers* and *brakes* to stay in the safe set, plus a **dual-Lagrangian constrained-PPO**
-objective that treats crash cost as a hard constraint rather than just another reward term.
+**Safety filters — evaluated, then retired to a backstop.** Classical runtime filters
+(brake shield, ORCA, CBF-QP — see `rl/cbf.py` / `rl/safety.py`) were tried: the brake
+shield was net-negative (sudden stops cascade into pile-ups) and the CBF-QP is limited
+by non-holonomic cars that can't execute a lateral dodge at low speed. The policy itself
+learns to avoid conflict states; the write-up is in
+[`docs/RESEARCH_SAFETY.md`](docs/RESEARCH_SAFETY.md).
 
-**Network.** Permutation-invariant **Deep Sets + attention** over a variable neighbor set,
-so the policy is agnostic to how many cars are nearby.
+**Network.** Permutation-invariant **Deep Sets** encoders over the variable neighbor and
+pedestrian sets (an attention pool was tested and didn't beat it), so the policy is
+agnostic to how many cars are nearby — the property that lets one policy generalize
+across maps and densities.
 
 The reasoning behind each choice lives in [`components/`](components/) (one JSON per
 decision) and [`docs/`](docs/).
@@ -59,10 +66,10 @@ decision) and [`docs/`](docs/).
 ## Run it
 
 ```bash
-pip install -e .            # JAX + deps
+pip install -e '.[rl,data,dev]'          # JAX/Flax/Optax + OSM tooling + pytest
 python -m smoothride.rl.train_local      # train the coordination policy locally
 python scripts/eval_policy.py            # held-out evaluation
-pytest                                   # ~170 tests (env, rl, data, demo)
+pytest                                   # ~180 tests (env, rl, data, demo)
 ```
 
 **Run the 3D viewer locally** (see the next section for what you're looking at):
@@ -105,8 +112,9 @@ Useful URL params: `?lite=1` (meeting mode: lighter caches + plain buildings),
 ## Repo map
 
 - `smoothride/env/` — JAX kinematic env, routing, spatial hash, pedestrian paths.
-- `smoothride/rl/` — `ppo.py` (MAPPO + dual-Lagrangian), `cbf.py` (HOCBF safety filter),
-  `networks.py` (Deep Sets + attention), `verifier.py`, `modal_train.py`.
+- `smoothride/rl/` — `ppo.py` (MAPPO + dual-Lagrangian), `verifier.py` (the rules /
+  cost channel), `networks.py` (Deep Sets + attention), `modal_train.py`,
+  `cbf.py`/`safety.py` (retired classical-filter experiments).
 - `smoothride/data/` — OSM map loader + SF travel-demand model.
 - `smoothride/demo/` — the Cesium 3D viewer, landing page, and scene exporters.
 - `smoothride/worldsim/` — experimental rigid-body physics path.
