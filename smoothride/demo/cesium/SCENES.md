@@ -4,16 +4,16 @@ These `public/*.json` files are **pre-rendered, self-contained scenes** (each em
 
 ## View them
 ```bash
-cd smoothride/demo/cesium
-python3 -m http.server 8137
-# open http://127.0.0.1:8137  → use the "iter" dropdown (top-left HUD) to switch scenes
+python3 scripts/serve_demo.py     # no-cache server for smoothride/demo, port 8141
+# open http://127.0.0.1:8141/cesium/index.html
+#   → use the "Policy checkpoint" dropdown (telemetry panel) to switch scenes
 ```
-Needs a Cesium ion token in the git-ignored `config.js` (copy `config.example.js` and paste a free token). Without a token the viewer still works (flat ellipsoid + GeoJSON buildings instead of photoreal terrain).
+A default Cesium ion token is embedded in `app.js`, so photoreal terrain + OSM buildings render with zero setup. Without any token the viewer still works (flat ellipsoid + OSM raster tiles).
 
-**Reading the viewer:** cars are cones — **red = crashed, green = arrived, blue = en-route** (brighter = faster). Pedestrians are amber cylinders. Press play on the Cesium timeline; zoom into an intersection to watch cars slow for crossing pedestrians and queue without colliding. The HUD shows live cars / trips / crashed counts.
+**Reading the viewer:** cars are 3D models near the camera (dots at distance) — **red = crashed** (removed 3 s after the crash), **green = arrived** (ghosts out — no longer an obstacle), **blue = en-route** (brighter = faster). Pedestrians are small 3D figures (amber dots from altitude). Press play on the Cesium timeline; zoom into an intersection to watch cars slow for crossing pedestrians and queue without colliding. The telemetry dashboard shows live trips / moving / crashed / speed.
 
 ## The dropdown (`manifest.json`)
-`manifest.json` lists the scenes and their labels; the viewer builds the dropdown from it and loads the last entry by default. Edit/extend it to add scenes (`{"iter", "file", "label"}`).
+`manifest.json` lists the scenes and their labels; the viewer builds the dropdown from it and defaults to the **champion** entry (falling back to the most-trained snapshot). Edit/extend it to add scenes (`{"iter", "file", "label"}`).
 
 ## What each scene is
 
@@ -23,6 +23,8 @@ Needs a Cesium ion token in the git-ignored `config.js` (copy `config.example.js
 | iter 50 … 250 | `scene_it000{50,100,150,200,250}.json` | `trained_peds` @ that iteration | downtown | 96 / 300 | **Training progression** — scrub to watch the policy learn |
 | iter 299 | `scene_it00299.json` | `trained_peds` (final) | downtown | 96 / 300 | Fully-trained v1 (dense 300-ped downtown) |
 | **CHAMPION v4loo — held-out Mission** | `scene_champion_mission.json` | `trained_v4loo` (v2 generalization champion, trained on downtown+nopa+chinatown — **never saw Mission**) | **mission** | 96 / 10 | **Cross-region generalization** — ~1–2% crashes on an unseen neighborhood |
+| CHAMPION v4loo — Mission, busy sidewalks | `scene_champion_mission_peds24.json` | same `trained_v4loo` checkpoint, 24 peds | mission | 96 / 24 | More pedestrian traffic to watch yielding — and the **density frontier**: crashes rise to ~6% (6/96) beyond the ~5-ped training density |
+| v7 dense — Mission, 288 peds (3/car stress test) | `scene_dense_mission_288.json` | `trained_v7d288` (overnight run trained at 288 peds, leave-one-out regions) | mission | 96 / 288 | **Density stress test** — 3 peds per car; ~19% crashes (18/96) vs ~50% for the 5-ped champion at this density. Finished peds are removed (no longer obstacles) |
 
 Notes:
 - The `iter 0…299` series is the **v1** model (single-cost, dense pedestrians) — kept because it's the clearest "watch it learn" progression for the dropdown.

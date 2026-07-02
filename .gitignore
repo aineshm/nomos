@@ -45,3 +45,9 @@ deck/
 .coverage
 .pytest_cache/
 runs_demo/
+
+# local checkpoint copies (canonical copies live in the Modal volume)
+runs_champ/
+runs_dense/
+runs_v8/
+runs_v9/
