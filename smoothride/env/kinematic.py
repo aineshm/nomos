@@ -122,6 +122,9 @@ class State:
     ped_dir: jnp.ndarray
     ped_vel: jnp.ndarray
     ped_crossing: jnp.ndarray
+    ped_done: jnp.ndarray      # (M,) bool: walked the full path (LATCHES; ped is
+                               # no longer an obstacle nor observed — mirrors
+                               # remove-on-arrival for cars)
     t: jnp.ndarray
 
 
@@ -233,6 +236,8 @@ def _observe(env: Env, st: State, cand) -> dict:
     # ----- ped set: nearest cand_cap_ped peds, ego-frame, masked, + crossing bit -----
     pd = st.pos[:, None, :] - st.ped_pos[None, :, :]
     pdist = jnp.linalg.norm(pd, axis=-1)                              # (N, M)
+    # finished peds leave the world: never candidates, never in range
+    pdist = jnp.where(st.ped_done[None, :], 1e9, pdist)
     cp = min(env.cand_cap_ped, env.n_peds)
     _, pk = jax.lax.top_k(-pdist, cp)                                 # (N, cp)
     prel = st.ped_pos[pk] - st.pos[:, None, :]
@@ -270,7 +275,7 @@ def _pad_set(feat: jnp.ndarray, mask: jnp.ndarray, cap: int, fdim: int):
 
 def _ped_step(env: Env, st: State):
     """Deterministic ped motion: position is a pure function of time along the
-    prebuilt polyline. No RNG. Returns (pos, vel, dir, crossing)."""
+    prebuilt polyline. No RNG. Returns (pos, vel, dir, crossing, done)."""
     walked = (jnp.maximum(0, st.t - env.ped_starts).astype(jnp.float32)
               * env.ped_speed * env.dt)
     ped_pos = arc_interp(env.ped_paths, env.ped_cum, walked)
@@ -281,7 +286,8 @@ def _ped_step(env: Env, st: State):
     ped_vel = jnp.where(moving[:, None], delta / env.dt, 0.0)
     ped_dir = jnp.arctan2(ped_vel[:, 1], ped_vel[:, 0])
     crossing = (walked >= env.cross_lo) & (walked <= env.cross_hi) & moving
-    return ped_pos, ped_vel, _wrap(ped_dir), crossing
+    done = walked >= env.ped_cum[:, -1]   # trip finished: off the board
+    return ped_pos, ped_vel, _wrap(ped_dir), crossing, done
 
 
 def _place_cars(env: Env, key: jax.Array):
@@ -334,11 +340,12 @@ def reset(env: Env, key: jax.Array):
         ped_dir=jnp.zeros(env.n_peds),
         ped_vel=jnp.zeros((env.n_peds, 2)),
         ped_crossing=jnp.zeros(env.n_peds, bool),
+        ped_done=jnp.zeros(env.n_peds, bool),
         t=jnp.array(0, jnp.int32),
     )
-    ped_pos, ped_vel, ped_dir, crossing = _ped_step(env, st0)
+    ped_pos, ped_vel, ped_dir, crossing, ped_done = _ped_step(env, st0)
     st = st0.replace(ped_pos=ped_pos, ped_vel=ped_vel, ped_dir=ped_dir,
-                     ped_crossing=crossing)
+                     ped_crossing=crossing, ped_done=ped_done)
     return st, _observe(env, st, _candidates(env, st.pos))
 
 
@@ -391,8 +398,11 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     min_d = cd.min(1)
     car_crash = (min_d < env.collision_radius) & ~immune
 
-    # pedestrians (severe)
+    # pedestrians (severe). A ped that finished its path is no longer an
+    # obstacle (same rule as done cars above) — its endpoint keep-out would
+    # otherwise intrude into the road edge forever.
     pd = jnp.linalg.norm(pos[:, None, :] - st.ped_pos[None, :, :], axis=-1)
+    pd = jnp.where(st.ped_done[None, :], 1e9, pd)
     ped_min = pd.min(axis=-1)
     ped_hit = (ped_min < env.ped_radius) & ~immune
     crash_event = car_crash | ped_hit
@@ -414,7 +424,7 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
     lane = jnp.where(done, st.lane, lane)
     speed = jnp.where(done_after, 0.0, speed)
     spawn_grace = jnp.maximum(st.spawn_grace - 1, 0)
-    ped_pos, ped_vel, ped_dir, ped_crossing = _ped_step(env, st.replace(t=st.t + 1))
+    ped_pos, ped_vel, ped_dir, ped_crossing, ped_done = _ped_step(env, st.replace(t=st.t + 1))
 
     # CMDP reward (§9): efficiency only — progress along route, arrival bonus, and a
     # small per-step time cost. Crash/lane/proximity constraints are scored by the
@@ -430,7 +440,7 @@ def step(env: Env, st: State, action: jnp.ndarray, key: jax.Array):
                 wp_ptr=wp_ptr, lane=lane, just_crashed=crash_event, crashes=crashes,
                 spawn_grace=spawn_grace, arrived=arrived,
                 goals=goals, ped_pos=ped_pos, ped_dir=ped_dir,
-                ped_vel=ped_vel, ped_crossing=ped_crossing, t=t)
+                ped_vel=ped_vel, ped_crossing=ped_crossing, ped_done=ped_done, t=t)
     # Expose collision components separately (v2 Task 2): car_crash and ped_hit let the
     # training relabel weight car-ped higher and target collisions -> 0. just_crashed
     # (their OR) is KEPT for back-compat.

@@ -156,3 +156,71 @@ def test_ped_advances_one_step_after_first_step():
     # Sanity: position must have moved away from path[0]
     assert np.linalg.norm(actual_pos - p0) > 0.01, \
         "ped must have left path[0] after one step (clock lag not fixed)"
+
+
+# ---------------------------------------------------------------------------
+# Done-ped removal: a pedestrian that finished its path is no longer an
+# obstacle (mirrors remove-on-arrival for cars) and leaves the observation set.
+# ---------------------------------------------------------------------------
+
+def _all_peds_done_state(env):
+    """Fast-forward a fresh world until every ped has walked its full path."""
+    starts = jnp.zeros_like(jnp.asarray(env.ped_starts))
+    env = env.replace(ped_starts=starts)
+    st, _ = K.reset(env, jax.random.PRNGKey(0))
+    total = float(np.asarray(env.ped_cum[:, -1]).max())
+    steps = int(total / (env.ped_speed * env.dt)) + 2
+    act = jnp.zeros((env.n_agents, env.act_dim))
+    s, obs = st, None
+    for _ in range(steps):
+        s, obs, *_ = K.step(env, s, act, jax.random.PRNGKey(0))
+    return env, s, obs, act
+
+
+def test_ped_done_flag_latches_after_path_end():
+    env, s, _, _ = _all_peds_done_state(_env())
+    assert bool(jnp.all(s.ped_done)), "every ped must be done after walking its path"
+    # done peds are frozen at the path end with zero velocity
+    np.testing.assert_allclose(np.asarray(s.ped_vel), 0.0, atol=1e-6)
+
+
+def test_done_ped_is_not_an_obstacle():
+    env, s, _, act = _all_peds_done_state(_env(ped_radius=3.5))
+    # park car 0 exactly on ped 0's endpoint; clear its done/immunity state
+    end0 = jnp.asarray(env.ped_paths[0, -1])
+    s2 = s.replace(
+        pos=s.pos.at[0].set(end0),
+        crashes=s.crashes.at[0].set(0),
+        arrived=s.arrived.at[0].set(False),
+        spawn_grace=jnp.zeros_like(s.spawn_grace),
+    )
+    _, _, _, _, info = K.step(env, s2, act, jax.random.PRNGKey(0))
+    assert not bool(info["ped_hit"][0]), \
+        "a finished pedestrian must not register ped_hit (not an obstacle)"
+
+
+def test_active_ped_still_hits():
+    """Contrast: an ACTIVE (mid-path) ped within ped_radius still registers."""
+    env = _env(ped_radius=3.5)
+    starts = jnp.zeros_like(jnp.asarray(env.ped_starts))
+    env = env.replace(ped_starts=starts)
+    st, _ = K.reset(env, jax.random.PRNGKey(0))
+    act = jnp.zeros((env.n_agents, env.act_dim))
+    s = st
+    for _ in range(3):   # walked > 0, far from path end
+        s, *_ = K.step(env, s, act, jax.random.PRNGKey(0))
+    assert not bool(s.ped_done[0]), "fixture: ped 0 must still be active"
+    s2 = s.replace(
+        pos=s.pos.at[0].set(s.ped_pos[0]),
+        crashes=s.crashes.at[0].set(0),
+        arrived=s.arrived.at[0].set(False),
+        spawn_grace=jnp.zeros_like(s.spawn_grace),
+    )
+    _, _, _, _, info = K.step(env, s2, act, jax.random.PRNGKey(0))
+    assert bool(info["ped_hit"][0]), "an active ped within ped_radius must hit"
+
+
+def test_done_ped_removed_from_observation():
+    env, s, obs, _ = _all_peds_done_state(_env())
+    assert not bool(np.asarray(obs["peds_mask"]).any()), \
+        "finished peds must not appear in the observation ped set"
