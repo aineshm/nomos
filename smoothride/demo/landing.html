@@ -79,6 +79,15 @@
     background:linear-gradient(180deg,var(--grn),var(--grn2));-webkit-background-clip:text;background-clip:text;color:transparent}
   .stat .l{font-size:13.5px;color:var(--mut);margin-top:6px}
 
+  /* simulator shot */
+  .shot{display:block;width:100%;border-radius:16px;border:1px solid var(--line);margin-top:44px;
+    box-shadow:0 30px 80px rgba(0,0,0,.5);transition:.25s}
+  a:hover .shot{border-color:rgba(52,211,153,.4);transform:translateY(-3px)}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;justify-content:center}
+  .legend span{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);
+    background:var(--bg2);border:1px solid var(--line);border-radius:99px;padding:7px 14px}
+  .legend i{width:10px;height:10px;border-radius:50%}
+
   .split{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
   @media(max-width:840px){.split{grid-template-columns:1fr}}
   .badlist,.goodlist{list-style:none;display:flex;flex-direction:column;gap:12px;margin-top:24px}
@@ -102,6 +111,7 @@
     <a href="#problem">Problem</a>
     <a href="#solution">Solution</a>
     <a href="#how">How it works</a>
+    <a href="#sim">Simulator</a>
     <a href="#results">Results</a>
     <a class="btn" href="cesium/index.html">Run the sim →</a>
   </div>
@@ -155,6 +165,19 @@
     <div class="card"><div class="n">01</div><h3>Real San Francisco</h3><p>The drivable street network — roads, junctions, speed limits — is pulled straight from OpenStreetMap and rendered in 3D with terrain and buildings.</p></div>
     <div class="card"><div class="n">02</div><h3>Multi-agent RL</h3><p>Hundreds of agents train in a fast vectorized env on GPU, sharing one decentralized policy with a centralized critic (CTDE) so they learn to coordinate.</p></div>
     <div class="card"><div class="n">03</div><h3>Verify every run</h3><p>A pure, deterministic verifier replays the logged trajectory and scores it — turning "did the city run safely?" into a reusable, gradeable RL environment.</p></div>
+  </div>
+</div></section>
+
+<section id="sim"><div class="wrap">
+  <div class="kicker">The simulator</div>
+  <h2>Real checkpoints, replayed on a real city.</h2>
+  <p class="lead">Rollouts of the <b>actual trained policy</b> replay in a live 3D San Francisco — Cesium World Terrain, OSM buildings, and a telemetry dashboard. Pick a training iteration from the dropdown to <b>watch the policy learn</b>, or load the champion run on held-out Mission.</p>
+  <a href="cesium/index.html"><img class="shot" src="sim-shot.jpg" alt="Nomos 3D viewer — the trained fleet driving the Mission district with live telemetry" loading="lazy"></a>
+  <div class="legend">
+    <span><i style="background:#3b82f6"></i>en-route (brighter = faster)</span>
+    <span><i style="background:#22c55e"></i>trip complete</span>
+    <span><i style="background:#ef4444"></i>crashed — removed after 3 s</span>
+    <span><i style="background:#f59e0b"></i>pedestrian</span>
   </div>
 </div></section>
 
